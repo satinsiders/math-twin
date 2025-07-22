@@ -238,8 +238,11 @@ SampleAgent = Agent(
 StemChoiceAgent = Agent(
     name="StemChoiceAgent",
     instructions=(
-        "Using the template + sampled params + visuals, draft the final twin stem "
-        "and answer choices (SAT tone)."
+        "Return *only* a single JSON object with these keys exactly:\n"
+        "  \"twin_stem\": string,\n"
+        "  \"choices\": array of strings,\n"
+        "  \"rationale\": string\n"
+        "Use double-quoted keys and values, no backticks, no Python dict syntax, no extra text."
     ),
     model="gpt-4o",
 )
@@ -342,7 +345,8 @@ def _step_stem_choice(data: dict[str, Any]) -> dict[str, Any]:
         "table_html": data.get("table_html"),
     }
     res = AgentsRunner.run_sync(StemChoiceAgent, input=json.dumps(payload))
-    data["stem_data"] = json.loads(str(res.final_output))
+    print("DEBUG STEM RAW OUTPUT:", repr(res.final_output))
+    data["stem_data"] = _safe_json(str(res.final_output))
     return data
 
 
@@ -358,7 +362,7 @@ def _step_format(data: dict[str, Any]) -> dict[str, Any]:
     if "table_html" in data:
         payload["table_html"] = data["table_html"]
     res = AgentsRunner.run_sync(FormatterAgent, input=json.dumps(payload))
-    return cast(dict[str, Any], json.loads(str(res.final_output)))
+    return _safe_json(str(res.final_output))
 
 
 GRAPH = Graph(
