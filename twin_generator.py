@@ -238,6 +238,9 @@ SampleAgent = Agent(
 StemChoiceAgent = Agent(
     name="StemChoiceAgent",
     instructions=(
+        "Using the *parameter template* and the sampled params, draft a **new SAT-style** equation problem "
++       "that tests the same concept but with surface variation. "
+        "E.g. if params are {A:7,B:4,C:25}, you might write “If 7A + 4 = 25, what is the value of A?” "
         "Return *only* a single JSON object with these keys exactly:\n"
         "  \"twin_stem\": string,\n"
         "  \"choices\": array of strings,\n"
@@ -352,7 +355,7 @@ def _step_stem_choice(data: dict[str, Any]) -> dict[str, Any]:
 
 def _step_format(data: dict[str, Any]) -> dict[str, Any]:
     payload = {
-        "twin_stem": data["stem_data"].get("twin_stem"),
+        "question": data["stem_data"].get("twin_stem"),
         "choices": data["stem_data"].get("choices"),
         "answer": data["answer"],
         "rationale": data["stem_data"].get("rationale"),
