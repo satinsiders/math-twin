@@ -228,7 +228,8 @@ SampleAgent = Agent(
     name="sample",
     instructions=(
         "Given a parameterized math problem template, generate a candidate "
-        "parameter set and compute output."
+        "parameter set and compute output. "
+        "Return only the parameter mapping as valid JSON without any prose."
     ),
     model="gpt-4o",
 )
