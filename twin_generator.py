@@ -70,9 +70,7 @@ import sympy as sp  # type: ignore
 try:
     from agents import Agent
     from agents.run import Runner as AgentsRunner
-    from agents.tool import function_tool
-
-    tool: Callable[..., Any] = function_tool
+    from agents.tool import function_tool as tool
 except ModuleNotFoundError:  # pragma: no cover – local smoke‑test mode
 
     class _Dummy:
@@ -93,14 +91,11 @@ except ModuleNotFoundError:  # pragma: no cover – local smoke‑test mode
         return func
 
 # ---------------------------------------------------------------------------
-# Utility tool functions (exposed to LLM Workers via @tool)
+# Utility implementations + FunctionTool wrappers for LLM Workers
 # ---------------------------------------------------------------------------
 
-
-@tool
-def sample_params(template_json: str) -> str:
+def sample_params_impl(template_json: str) -> str:
     """Randomly sample numeric params within provided domains."""
-
     template = json.loads(template_json)
     params: dict[str, Any] = {}
     for name, spec in template.get("params", {}).items():
@@ -115,11 +110,12 @@ def sample_params(template_json: str) -> str:
             params[name] = random.randint(int(low), int(high))
     return json.dumps(params)
 
+# Expose to LLM as FunctionTool
+sample_params_tool = tool(sample_params_impl)
 
-@tool
-def render_graph(spec_json: str) -> str:
+
+def render_graph_impl(spec_json: str) -> str:
     """Render graph → base64‑PNG string (inline, avoids temp files)."""
-
     spec = json.loads(spec_json)
     points = spec.get("points", [])
     style = spec.get("style", "line")
@@ -138,11 +134,12 @@ def render_graph(spec_json: str) -> str:
     buf.seek(0)
     return base64.b64encode(buf.read()).decode()
 
+# Expose to LLM as FunctionTool
+render_graph_tool = tool(render_graph_impl)
 
-@tool
-def make_html_table(table_json: str) -> str:
+
+def make_html_table_impl(table_json: str) -> str:
     """Convert a JSON table spec → `<table>` element string."""
-
     data = json.loads(table_json)
     header = data.get("header", [])
     rows = data.get("rows", [])
@@ -150,13 +147,14 @@ def make_html_table(table_json: str) -> str:
     rows_html = "".join(
         "<tr>" + "".join(f"<td>{cell}</td>" for cell in row) + "</tr>" for row in rows
     )
-    return f"<table><thead><tr>{head_html}</tr></thead><tbody>{rows_html}</tbody></table>"
+    return f"<table><thead><tr>{{head_html}}</tr></thead><tbody>{rows_html}</tbody></table>"
+
+# Expose to LLM as FunctionTool
+make_html_table_tool = tool(make_html_table_impl)
 
 
-@tool
-def calc_answer(expression: str, params_json: str) -> Any:
+def calc_answer_impl(expression: str, params_json: str) -> Any:
     """Safely evaluate `expression` under the numbered params."""
-
     params = json.loads(params_json)
     expr = sp.sympify(expression)
     result = expr.evalf(subs=params)
@@ -165,6 +163,9 @@ def calc_answer(expression: str, params_json: str) -> Any:
     if result.is_Float:
         return float(result)
     return str(result)
+
+# Expose to LLM as FunctionTool
+calc_answer_tool = tool(calc_answer_impl)
 
 
 # ---------------------------------------------------------------------------
@@ -321,15 +322,15 @@ def _step_sample(data: dict[str, Any]) -> dict[str, Any]:
 def _step_visual(data: dict[str, Any]) -> dict[str, Any]:
     visual = data["template"].get("visual", {"type": "none"})
     if visual.get("type") == "graph":
-        data["graph_img"] = render_graph(json.dumps(visual.get("data", {})))
+        data["graph_img"] = render_graph_impl(json.dumps(visual.get("data", {})))
     elif visual.get("type") == "table":
-        data["table_html"] = make_html_table(json.dumps(visual.get("data", {})))
+        data["table_html"] = make_html_table_impl(json.dumps(visual.get("data", {})))
     return data
 
 
 def _step_answer(data: dict[str, Any]) -> dict[str, Any]:
     expr = data["template"].get("answer_expression", "0")
-    data["answer"] = calc_answer(expr, json.dumps(data["params"]))
+    data["answer"] = calc_answer_impl(expr, json.dumps(data["params"]))
     return data
 
 
