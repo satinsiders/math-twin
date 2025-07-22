@@ -1,0 +1,101 @@
+Correct Answer
+A
+
+Explanation (concise)
+Estimate two convenient points on the line of best fit.
+From the graph, convenient points are roughly 
+(
+10
+,
+  
+930
+)
+(10,930) and 
+(
+26
+,
+  
+340
+)
+(26,340). 
+Amazon Web Services, Inc.
+
+Compute the slope.
+
+𝑚
+≈
+340
+−
+930
+26
+−
+10
+  
+=
+  
+−
+590
+16
+  
+≈
+  
+−
+36.9
+  
+(
+about 
+−
+35
+)
+m≈ 
+26−10
+340−930
+​
+ = 
+16
+−590
+​
+ ≈−36.9(about −35)
+Find the y-intercept 
+𝑏
+b.
+Substitute one point into 
+𝑦
+=
+𝑚
+𝑥
++
+𝑏
+y=mx+b:
+
+930
+≈
+(
+−
+35
+)
+(
+10
+)
++
+𝑏
+  
+  
+⇒
+  
+  
+𝑏
+≈
+930
++
+350
+=
+1,280
+  
+(
+about 
+1,300
+)
+930≈(−35)(10)+b⇒b≈930+350=1,280(about 1,300)
+Compare with answer choices.
+Only choice A matches both the approximate slope (-35) and intercept (≈1,300).

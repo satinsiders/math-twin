@@ -1,0 +1,41 @@
+The scatterplot shows the relationship between a car’s age x (in years) and its resale value y (in dollars). A line of best fit is drawn on the graph.
+
+Which of the following equations best models the line of best fit?
+
+Choice	Equation
+A	
+𝑦
+=
+−
+35
+𝑥
++
+1,300
+y=−35x+1,300
+B	
+𝑦
+=
+−
+15
+𝑥
++
+1,300
+y=−15x+1,300
+C	
+𝑦
+=
+−
+35
+𝑥
++
+900
+y=−35x+900
+D	
+𝑦
+=
+35
+𝑥
+−
+1,300
+y=35x−1,300
+https://s3-ap-northeast-2.amazonaws.com/ep-superfast/uploads1747101891012-K-002.png
