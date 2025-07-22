@@ -45,6 +45,7 @@ pip install sympy matplotlib python-dotenv
 
 ------------- CODE STARTS BELOW -------------
 """
+
 from __future__ import annotations
 
 import argparse
@@ -52,11 +53,12 @@ import base64
 import json
 import os
 import random
+import re
 import sys
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Callable, List, TypedDict
+from typing import Any, Callable, cast
 
 import matplotlib.pyplot as plt  # type: ignore
 import sympy as sp  # type: ignore
@@ -80,9 +82,7 @@ except ModuleNotFoundError:  # pragma: no cover – local smoke‑test mode
     class _DummyRunner:
         @classmethod
         def run_sync(cls, *_: Any, **__: Any) -> Any:
-            raise RuntimeError(
-                "OpenAI Agents SDK not found. Install it or run with --local-only."
-            )
+            raise RuntimeError("OpenAI Agents SDK not found. Install it or run with --local-only.")
 
     Agent = _Dummy  # type: ignore
     AgentsRunner = _DummyRunner  # type: ignore
@@ -171,21 +171,26 @@ def calc_answer(expression: str, params_json: str) -> Any:
 # Helpers
 # ---------------------------------------------------------------------------
 
-import re
 
-def _safe_json(text: str) -> dict:
+def _safe_json(text: str) -> dict[str, Any]:
     """Attempts to safely parse JSON from raw agent output."""
     # Strip code block fences like ```json ... ```
     fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
     if fenced:
         text = fenced.group(1)
+    else:
+        # Try to locate the first JSON object in the text.
+        bracketed = re.search(r"\{.*\}", text, re.DOTALL)
+        if bracketed:
+            text = bracketed.group(0)
 
     try:
-        return json.loads(text)
+        data = json.loads(text)
+        return cast(dict[str, Any], data)
     except json.JSONDecodeError as exc:
-        # Show the first ~300 characters to avoid dumping everything
+        # Show the first ~300 characters to avoid dumping everything.
         snippet = text.strip().replace("\n", " ")[:300]
-        raise ValueError(f'Agent output was not valid JSON: {snippet}...') from exc
+        raise ValueError(f"Agent output was not valid JSON: {snippet}...") from exc
 
 
 # ---------------------------------------------------------------------------
@@ -220,9 +225,10 @@ TemplateAgent = Agent(
 )
 
 SampleAgent = Agent(
-    name = "sample",
-    instructions =(
-        "Given a parameterized math problem template, generate a candidate parameter set and compute output."
+    name="sample",
+    instructions=(
+        "Given a parameterized math problem template, generate a candidate "
+        "parameter set and compute output."
     ),
     model="gpt-4o",
 )
@@ -253,7 +259,7 @@ FormatterAgent = Agent(
 
 @dataclass
 class Graph:
-    steps: List[Callable[[dict[str, Any]], dict[str, Any]]]
+    steps: list[Callable[[dict[str, Any]], dict[str, Any]]]
 
 
 class Runner:
@@ -350,7 +356,7 @@ def _step_format(data: dict[str, Any]) -> dict[str, Any]:
     if "table_html" in data:
         payload["table_html"] = data["table_html"]
     res = AgentsRunner.run_sync(FormatterAgent, input=json.dumps(payload))
-    return json.loads(str(res.final_output))
+    return cast(dict[str, Any], json.loads(str(res.final_output)))
 
 
 GRAPH = Graph(
@@ -376,7 +382,8 @@ def generate_twin(problem_text: str, solution_text: str) -> dict[str, Any]:
     """Generate a twin problem programmatically."""
 
     runner = Runner(GRAPH)
-    return runner.run({"problem_text": problem_text, "solution": solution_text})["output"]
+    result = runner.run({"problem_text": problem_text, "solution": solution_text})
+    return cast(dict[str, Any], result["output"])
 
 
 # ---------------------------------------------------------------------------
@@ -402,16 +409,7 @@ _GRAPH_TEMPLATE = {
 }
 
 
-class _Args(TypedDict):
-    problem: str | None
-    solution: str | None
-    demo: bool
-    graph_demo: bool
-    out: str | None
-    local_only: bool
-
-
-def _parse_cli() -> _Args:  # noqa: D401
+def _parse_cli() -> argparse.Namespace:  # noqa: D401
     parser = argparse.ArgumentParser(description="Generate SAT twin problems ✔")
     parser.add_argument("--problem", help="Path to source problem text")
     parser.add_argument("--solution", help="Path to official solution text")
@@ -423,12 +421,11 @@ def _parse_cli() -> _Args:  # noqa: D401
         action="store_true",
         help="Skip Agents calls; just dry‑run tool stubs (useful for CI).",
     )
-    ns = parser.parse_args()
-    return ns  # type: ignore[return-value]
+    return parser.parse_args()
 
 
 def _main() -> None:  # noqa: D401
-    ns: _Args = _parse_cli()
+    ns = _parse_cli()
 
     if ns.local_only:
         os.environ.setdefault("LOCAL_ONLY", "1")
