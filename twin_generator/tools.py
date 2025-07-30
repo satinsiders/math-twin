@@ -6,12 +6,12 @@ import json
 import os
 import tempfile
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
+import sympy as sp  # type: ignore
 
 import matplotlib  # type: ignore
 import matplotlib.pyplot as plt  # type: ignore
-import numpy as np  # type: ignore
-from PIL import Image  # type: ignore
+from agents.tool import function_tool as tool  # type: ignore
 
 # Prefer an interactive backend when a display is available; otherwise fall back
 _prefer_tk = os.environ.get("DISPLAY") or os.environ.get("MPLBACKEND") == "TkAgg"
@@ -22,8 +22,6 @@ try:
         matplotlib.use("Agg")
 except Exception:
     matplotlib.use("Agg")
-
-from agents.tool import function_tool as tool  # type: ignore
 
 __all__ = [
     "make_html_table_tool",
@@ -66,10 +64,15 @@ def _render_graph(spec_json: str) -> str:
 
     fig, ax = plt.subplots(figsize=(6, 6))
 
+    xs: tuple[float, ...]
+    ys: tuple[float, ...]
     if points:
         xs, ys = zip(*points)
+        xs = tuple(float(x) for x in xs)
+        ys = tuple(float(y) for y in ys)
     else:
-        xs, ys = [], []
+        xs = ()
+        ys = ()
 
     if style == "scatter":
         ax.scatter(xs, ys)
@@ -114,8 +117,9 @@ def _render_graph(spec_json: str) -> str:
     ax.tick_params(direction="out")
 
     # Write PNG to a temp file and return path
-    tmpdir = tempfile.gettempdir()
-    png_path = Path(tmpdir) / (next(tempfile._get_candidate_names()) + ".png")
+    fd, path = tempfile.mkstemp(suffix=".png")
+    os.close(fd)
+    png_path = Path(path)
     fig.savefig(png_path, format="png")
     plt.close(fig)
     return str(png_path)
@@ -127,7 +131,6 @@ render_graph_tool = tool(_render_graph)
 # ---------------------------------------------------------------------------
 # Exact math evaluator helper
 # ---------------------------------------------------------------------------
-import sympy as sp  # type: ignore
 
 
 def _calc_answer(expression: str, params_json: str) -> Any:  # noqa: ANN401 – generic return

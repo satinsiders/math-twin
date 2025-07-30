@@ -10,6 +10,7 @@ from typing import Any, cast
 # Generic agent output handling
 # ---------------------------------------------------------------------------
 
+
 def get_final_output(res: Any) -> str:  # noqa: ANN401 – generic return
     """Extract the best‑guess textual payload from an Agents SDK response."""
     out = getattr(res, "final_output", None) or getattr(res, "output", None) or getattr(res, "content", None) or res
