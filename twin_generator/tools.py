@@ -7,21 +7,6 @@ import os
 import tempfile
 from pathlib import Path
 from typing import Any
-import sympy as sp  # type: ignore
-
-import matplotlib  # type: ignore
-import matplotlib.pyplot as plt  # type: ignore
-from agents.tool import function_tool as tool  # type: ignore
-
-# Prefer an interactive backend when a display is available; otherwise fall back
-_prefer_tk = os.environ.get("DISPLAY") or os.environ.get("MPLBACKEND") == "TkAgg"
-try:
-    if _prefer_tk:
-        matplotlib.use("TkAgg")
-    else:
-        matplotlib.use("Agg")
-except Exception:
-    matplotlib.use("Agg")
 
 __all__ = [
     "make_html_table_tool",
@@ -57,6 +42,16 @@ make_html_table_tool = tool(_make_html_table)
 
 def _render_graph(spec_json: str) -> str:
     """Render a graph to a **PNG file** and return the file path (string)."""
+    import matplotlib  # type: ignore
+    _prefer_tk = os.environ.get("DISPLAY") or os.environ.get("MPLBACKEND") == "TkAgg"
+    try:
+        if _prefer_tk:
+            matplotlib.use("TkAgg")
+        else:
+            matplotlib.use("Agg")
+    except Exception:
+        matplotlib.use("Agg")
+    import matplotlib.pyplot as plt  # type: ignore
     spec = json.loads(spec_json)
     points: list[list[float]] = spec.get("points", [])
     style: str = spec.get("style", "line")

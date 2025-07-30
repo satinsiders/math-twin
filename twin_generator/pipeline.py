@@ -8,6 +8,7 @@ from typing import Any, Callable, cast
 from agents.run import Runner as AgentsRunner  # type: ignore
 
 from . import constants as C
+from .constants import GraphSpec
 from .agents import (
     ConceptAgent,
     FormatterAgent,
@@ -178,7 +179,7 @@ def generate_twin(
     solution_text: str,
     *,
     force_graph: bool = False,
-    graph_spec: dict[str, Any] | None = None,
+    graph_spec: GraphSpec | None = None,
     verbose: bool = False,
 ) -> dict[str, Any]:  # noqa: ANN401 – generic return
     """Generate a twin SAT‑style math question given a source problem/solution."""
