@@ -1,15 +1,16 @@
-import types
+from __future__ import annotations
+
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
-
 import twin_generator.pipeline as pipeline
 
 
-def test_generate_twin_success(monkeypatch):
+def test_generate_twin_success(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = []
 
-    def mock_run_sync(agent, input):
+    def mock_run_sync(agent: Any, input: Any) -> SimpleNamespace:
         calls.append(agent.name)
         name = agent.name
         if name == "ParserAgent":
@@ -23,7 +24,12 @@ def test_generate_twin_success(monkeypatch):
         if name == "StemChoiceAgent":
             return SimpleNamespace(final_output='{"twin_stem": "What is 1?", "choices": [1], "rationale": "r"}')
         if name == "FormatterAgent":
-            return SimpleNamespace(final_output='{"twin_stem": "What is 1?", "choices": [1], "answer_index": 0, "answer_value": 1, "rationale": "r"}')
+            return SimpleNamespace(
+                final_output=(
+                    '{"twin_stem": "What is 1?", "choices": [1], '
+                    '"answer_index": 0, "answer_value": 1, "rationale": "r"}'
+                )
+            )
         raise AssertionError("unexpected agent")
 
     monkeypatch.setattr(pipeline.AgentsRunner, "run_sync", mock_run_sync)
@@ -41,10 +47,10 @@ def test_generate_twin_success(monkeypatch):
     ]
 
 
-def test_generate_twin_agent_failure(monkeypatch):
+def test_generate_twin_agent_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     call_order = []
 
-    def mock_run_sync(agent, input):
+    def mock_run_sync(agent: Any, input: Any) -> SimpleNamespace:
         call_order.append(agent.name)
         if len(call_order) == 3:
             raise RuntimeError("boom")
