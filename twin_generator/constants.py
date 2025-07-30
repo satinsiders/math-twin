@@ -10,6 +10,7 @@ class GraphSpec(TypedDict):
     style: str
     title: str
 
+
 _DEMO_PROBLEM = """If 3x + 2 = 17, what is the value of x?"""
 _DEMO_SOLUTION = """Subtract 2 → 3x = 15, then divide by 3 → x = 5."""
 

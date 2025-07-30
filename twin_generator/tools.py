@@ -8,6 +8,8 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from agents.tool import function_tool
+
 __all__ = [
     "make_html_table_tool",
     "render_graph_tool",
@@ -33,7 +35,7 @@ def _make_html_table(table_json: str) -> str:
     return f"<table><thead><tr>{head_html}</tr></thead><tbody>{rows_html}</tbody></table>"
 
 
-make_html_table_tool = tool(_make_html_table)
+make_html_table_tool = function_tool(_make_html_table)
 
 
 # ---------------------------------------------------------------------------
@@ -120,7 +122,7 @@ def _render_graph(spec_json: str) -> str:
     return str(png_path)
 
 
-render_graph_tool = tool(_render_graph)
+render_graph_tool = function_tool(_render_graph)
 
 
 # ---------------------------------------------------------------------------
@@ -135,6 +137,7 @@ def _calc_answer(expression: str, params_json: str) -> Any:  # noqa: ANN401 â€“Â
     * Falls back to numeric evaluation
     * Coerces nearâ€‘integers to ``int`` when appropriate
     """
+    import sympy as sp
     params = json.loads(params_json)
     expr = sp.sympify(expression)
     exact = expr.subs(params)
@@ -166,4 +169,4 @@ def _calc_answer(expression: str, params_json: str) -> Any:  # noqa: ANN401 â€“Â
         return str(result)
 
 
-calc_answer_tool = tool(_calc_answer)
+calc_answer_tool = function_tool(_calc_answer)
