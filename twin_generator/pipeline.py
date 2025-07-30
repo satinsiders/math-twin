@@ -45,12 +45,16 @@ class _Graph:
 class _Runner:
     """Minimal re‑implementation of a sequential task executor."""
 
-    def __init__(self, graph: _Graph) -> None:
+    def __init__(self, graph: _Graph, *, verbose: bool = False) -> None:
         self.graph = graph
+        self.verbose = verbose
 
     def run(self, inputs: dict[str, Any]) -> dict[str, Any]:  # noqa: ANN401 – generic return
         data = dict(inputs)
         for step in self.graph.steps:
+            if self.verbose:
+                name = step.__name__.replace("_step_", "").lstrip("_")
+                print(f"[twin-generator] {name}…")
             data = step(data)
         return {"output": data}
 
@@ -177,9 +181,10 @@ def generate_twin(
     *,
     force_graph: bool = False,
     graph_spec: dict[str, Any] | None = None,
+    verbose: bool = False,
 ) -> dict[str, Any]:  # noqa: ANN401 – generic return
     """Generate a twin SAT‑style math question given a source problem/solution."""
-    runner = _Runner(_PIPELINE)
+    runner = _Runner(_PIPELINE, verbose=verbose)
     result = runner.run(
         {
             "problem_text": problem_text,

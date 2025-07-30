@@ -41,6 +41,7 @@ def _parse_cli(argv: list[str] | None = None) -> argparse.Namespace:  # noqa: D4
     parser.add_argument("--graph-demo", action="store_true", help="Run demo with graph visual")
     parser.add_argument("--out", help="Write JSON output to file")
     parser.add_argument("--preview", action="store_true", help="Preview graph PNG if generated")
+    parser.add_argument("--verbose", action="store_true", help="Print progress steps")
     return parser.parse_args(argv)
 
 
@@ -64,6 +65,7 @@ def main(argv: list[str] | None = None) -> None:  # noqa: D401 – imperative m
         solution_text,
         force_graph=bool(ns.graph_demo),
         graph_spec=C.DEFAULT_GRAPH_SPEC if ns.graph_demo else None,
+        verbose=bool(ns.verbose),
     )
 
     auto_preview = ns.preview or ns.graph_demo
