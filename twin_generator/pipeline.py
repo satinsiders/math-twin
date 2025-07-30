@@ -48,13 +48,15 @@ class _Runner:
         self.graph = graph
         self.verbose = verbose
 
-    def run(self, inputs: dict[str, Any]) -> dict[str, Any]:  # noqa: ANN401 – generic return
+    def run(self, inputs: dict[str, Any]) -> dict[str, Any]:  # noqa: ANN401 – generic return
         data = dict(inputs)
         for step in self.graph.steps:
             if self.verbose:
                 name = step.__name__.replace("_step_", "").lstrip("_")
                 print(f"[twin-generator] {name}…")
             data = step(data)
+            if "error" in data:
+                break
         return {"output": data}
 
 
@@ -64,26 +66,44 @@ class _Runner:
 
 
 def _step_parse(data: dict[str, Any]) -> dict[str, Any]:
-    res = AgentsRunner.run_sync(ParserAgent, input=data["problem_text"] + "\n" + data["solution"])
-    data["parsed"] = get_final_output(res)
+    try:
+        res = AgentsRunner.run_sync(ParserAgent, input=data["problem_text"] + "\n" + data["solution"])
+        data["parsed"] = get_final_output(res)
+    except Exception as exc:  # pragma: no cover - defensive
+        data["error"] = f"ParserAgent failed: {exc}"
     return data
 
 
 def _step_concept(data: dict[str, Any]) -> dict[str, Any]:
-    res = AgentsRunner.run_sync(ConceptAgent, input=str(data["parsed"]))
-    data["concept"] = get_final_output(res)
+    try:
+        res = AgentsRunner.run_sync(ConceptAgent, input=str(data["parsed"]))
+        data["concept"] = get_final_output(res)
+    except Exception as exc:  # pragma: no cover - defensive
+        data["error"] = f"ConceptAgent failed: {exc}"
     return data
 
 
 def _step_template(data: dict[str, Any]) -> dict[str, Any]:
-    res = AgentsRunner.run_sync(TemplateAgent, input=json.dumps({"parsed": data["parsed"], "concept": data["concept"]}))
-    data["template"] = safe_json(get_final_output(res))
+    try:
+        res = AgentsRunner.run_sync(
+            TemplateAgent,
+            input=json.dumps({"parsed": data["parsed"], "concept": data["concept"]}),
+        )
+        data["template"] = safe_json(get_final_output(res))
+    except Exception as exc:  # pragma: no cover - defensive
+        data["error"] = f"TemplateAgent failed: {exc}"
     return data
 
 
 def _step_sample(data: dict[str, Any]) -> dict[str, Any]:
-    res = AgentsRunner.run_sync(SampleAgent, input=json.dumps({"template": data["template"]}))
-    data["params"] = safe_json(get_final_output(res))
+    try:
+        res = AgentsRunner.run_sync(
+            SampleAgent,
+            input=json.dumps({"template": data["template"]}),
+        )
+        data["params"] = safe_json(get_final_output(res))
+    except Exception as exc:  # pragma: no cover - defensive
+        data["error"] = f"SampleAgent failed: {exc}"
     return data
 
 
@@ -123,8 +143,11 @@ def _step_stem_choice(data: dict[str, Any]) -> dict[str, Any]:
     if "table_html" in data:
         payload["table_html"] = data["table_html"]
 
-    res = AgentsRunner.run_sync(StemChoiceAgent, input=json.dumps(payload))
-    data["stem_data"] = safe_json(get_final_output(res))
+    try:
+        res = AgentsRunner.run_sync(StemChoiceAgent, input=json.dumps(payload))
+        data["stem_data"] = safe_json(get_final_output(res))
+    except Exception as exc:  # pragma: no cover - defensive
+        data["error"] = f"StemChoiceAgent failed: {exc}"
     return data
 
 
@@ -142,8 +165,12 @@ def _step_format(data: dict[str, Any]) -> dict[str, Any]:
     if "table_html" in data:
         payload["table_html"] = data["table_html"]
 
-    res = AgentsRunner.run_sync(FormatterAgent, input=json.dumps(payload))
-    out = safe_json(get_final_output(res))
+    try:
+        res = AgentsRunner.run_sync(FormatterAgent, input=json.dumps(payload))
+        out = safe_json(get_final_output(res))
+    except Exception as exc:  # pragma: no cover - defensive
+        data["error"] = f"FormatterAgent failed: {exc}"
+        return data
 
     # Pass‑through assets in case the formatter dropped them
     if "graph_path" in data:
