@@ -4,7 +4,9 @@ from setuptools import setup, find_packages
 setup(
     name="twin_generator",
     version="0.1.0",
+    description="Generate mathematical twin problems via OpenAI agents",
     packages=find_packages(),
+    python_requires=">=3.12",
     install_requires=[
         "sympy",
         "matplotlib",
