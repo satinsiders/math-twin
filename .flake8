@@ -1,0 +1,6 @@
+[flake8]
+max-line-length = 120
+extend-ignore = E203,W503,W292,W391
+
+# Exclude version control directories
+exclude = .git,__pycache__,build,dist
