@@ -24,8 +24,20 @@ def test_generate_twin_success(monkeypatch: pytest.MonkeyPatch) -> None:
         if name == "ConceptAgent":
             return SimpleNamespace(final_output="concept")
         if name == "TemplateAgent":
-            return SimpleNamespace(final_output='{"visual": {"type": "none"}, "answer_expression": "x"}')
+            return SimpleNamespace(
+                final_output=(
+                    '{"visual": {"type": "none"}, "answer_expression": "x", '
+                    '"operations": ['
+                    '{"kind": "sympy", "expr": "1", "output": "run_agent"}, '
+                    '{"kind": "agent", "agent": "SampleAgent", '
+                    '"input_key": "run_agent", "output": "extra", '
+                    '"condition": "run_agent"}'
+                    ']}'
+                )
+            )
         if name == "SampleAgent":
+            if isinstance(input, int):
+                return SimpleNamespace(final_output="extra_done")
             return SimpleNamespace(final_output='{"x": 1}')
         if name == "StemChoiceAgent":
             return SimpleNamespace(final_output='{"twin_stem": "What is 1?", "choices": [1], "rationale": "r"}')
@@ -53,6 +65,12 @@ def test_generate_twin_success(monkeypatch: pytest.MonkeyPatch) -> None:
         "TemplateAgent",
         "QAAgent",
         "SampleAgent",
+        "QAAgent",
+        "QAAgent",
+        "QAAgent",
+        "SampleAgent",
+        "QAAgent",
+        "QAAgent",
         "QAAgent",
         "StemChoiceAgent",
         "QAAgent",
