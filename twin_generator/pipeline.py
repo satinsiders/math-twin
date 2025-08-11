@@ -45,10 +45,20 @@ class _Graph:
 
 
 class _Runner:
-    """Minimal re‑implementation of a sequential task executor with QA checks."""
+    """Minimal re‑implementation of a sequential task executor with QA checks.
+
+    The runner executes each pipeline step sequentially and performs a QA check
+    after every step.  If the QA step fails the corresponding pipeline step is
+    retried until QA passes.  Optionally a maximum number of QA retries can be
+    supplied to prevent infinite loops.
+    """
 
     def __init__(
-        self, graph: _Graph, *, verbose: bool = False, qa_max_retries: int = 2
+        self,
+        graph: _Graph,
+        *,
+        verbose: bool = False,
+        qa_max_retries: int | None = None,
     ) -> None:
         self.graph = graph
         self.verbose = verbose
@@ -65,7 +75,7 @@ class _Runner:
             while True:
                 before = dict(data)
                 if self.verbose:
-                    print(f"[twin-generator] {name}…")
+                    print(f"[twin-generator] {name} attempt {attempts + 1}")
                 data = step(data)
                 if "error" in data:
                     break
@@ -77,12 +87,19 @@ class _Runner:
                 except Exception as exc:  # pragma: no cover - defensive
                     data["error"] = f"QAAgent failed: {exc}"
                     break
+                if self.verbose:
+                    print(
+                        f"[twin-generator] {name} QA round {attempts + 1}: {qa_out}"
+                    )
                 if qa_out == "pass":
                     if next_steps:
                         steps[idx + 1 : idx + 1] = next_steps
                     break
                 attempts += 1
-                if attempts > self.qa_max_retries:
+                if (
+                    self.qa_max_retries is not None
+                    and attempts >= self.qa_max_retries
+                ):
                     data["error"] = f"QA failed for {name}: {qa_out}"
                     break
                 data = before

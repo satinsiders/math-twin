@@ -111,3 +111,36 @@ def test_generate_twin_agent_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     ]
     assert "params" not in out
 
+
+def test_generate_twin_qa_retry(monkeypatch: pytest.MonkeyPatch) -> None:
+    call_counts: dict[str, int] = {}
+
+    def mock_run_sync(agent: Any, input: Any) -> SimpleNamespace:
+        name = agent.name
+        call_counts[name] = call_counts.get(name, 0) + 1
+        if name == "ParserAgent":
+            return SimpleNamespace(final_output="parsed")
+        if name == "ConceptAgent":
+            return SimpleNamespace(final_output="concept")
+        if name == "TemplateAgent":
+            return SimpleNamespace(final_output='{"visual": {"type": "none"}, "answer_expression": "0"}')
+        if name == "SampleAgent":
+            return SimpleNamespace(final_output='{}')
+        if name == "StemChoiceAgent":
+            return SimpleNamespace(final_output='{"twin_stem": "Q", "choices": [1], "rationale": "r"}')
+        if name == "FormatterAgent":
+            return SimpleNamespace(final_output='{"twin_stem": "Q", "choices": [1], "answer_index": 0, "answer_value": 1, "rationale": "r"}')
+        if name == "QAAgent":
+            # First QA check fails; subsequent ones pass
+            return SimpleNamespace(final_output="fail" if call_counts[name] == 1 else "pass")
+        raise AssertionError("unexpected agent")
+
+    monkeypatch.setattr(pipeline.AgentsRunner, "run_sync", mock_run_sync)
+
+    out = pipeline.generate_twin("p", "s")
+    assert out.get("error") is None
+    # Parser step should have been retried due to QA failure
+    assert call_counts.get("ParserAgent") == 2
+    # QAAgent called once per step plus the extra retry (total 10)
+    assert call_counts.get("QAAgent") == 10
+
