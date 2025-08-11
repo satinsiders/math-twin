@@ -17,6 +17,8 @@ from .agents import (
     SampleAgent,
     StemChoiceAgent,
     TemplateAgent,
+    SymbolicSolveAgent,
+    SymbolicSimplifyAgent,
 )
 from .tools import (
     _calc_answer,      # internal helper functions (NOT the FunctionTool wrappers!)
@@ -137,6 +139,18 @@ def _step_sample(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def _step_symbolic(data: dict[str, Any]) -> dict[str, Any]:
+    try:
+        payload = json.dumps({"template": data["template"], "params": data["params"]})
+        res = AgentsRunner.run_sync(SymbolicSolveAgent, input=payload)
+        data["symbolic_solution"] = get_final_output(res)
+        res2 = AgentsRunner.run_sync(SymbolicSimplifyAgent, input=data["symbolic_solution"])
+        data["symbolic_simplified"] = get_final_output(res2)
+    except Exception as exc:  # pragma: no cover - defensive
+        data["symbolic_error"] = f"Symbolic agents failed: {exc}"
+    return data
+
+
 def _step_operations(data: dict[str, Any]) -> dict[str, Any]:
     ops = data.get("template", {}).get("operations") or []
     steps: list[Callable[[dict[str, Any]], dict[str, Any]]] = []
@@ -156,7 +170,16 @@ def _step_operations(data: dict[str, Any]) -> dict[str, Any]:
             ) -> dict[str, Any]:
                 if _cond and not d.get(cast(str, _cond)):
                     return d
-                params = {k: v for k, v in d.items() if isinstance(v, (int, float, str))}
+                params = {}
+                for k, v in d.items():
+                    if isinstance(v, (int, float)):
+                        params[k] = v
+                    elif isinstance(v, str):
+                        try:
+                            float(v)
+                            params[k] = float(v)
+                        except Exception:
+                            pass
                 d[_out] = _calc_answer(_expr, json.dumps(params))
                 return d
 
@@ -275,6 +298,7 @@ _PIPELINE = _Graph(
         _step_concept,
         _step_template,
         _step_sample,
+        _step_symbolic,
         _step_operations,
         _step_visual,
         _step_answer,
