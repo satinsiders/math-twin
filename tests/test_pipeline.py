@@ -6,10 +6,11 @@ from typing import Any
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-import pytest
-import twin_generator.pipeline as pipeline
+import twin_generator.pipeline as pipeline  # noqa: E402
 
 
 def test_generate_twin_success(monkeypatch: pytest.MonkeyPatch) -> None:
