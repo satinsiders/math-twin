@@ -54,8 +54,6 @@ def test_generate_twin_success(monkeypatch: pytest.MonkeyPatch) -> None:
         "QAAgent",
         "SampleAgent",
         "QAAgent",
-        "QAAgent",
-        "QAAgent",
         "StemChoiceAgent",
         "QAAgent",
         "FormatterAgent",
