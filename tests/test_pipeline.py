@@ -39,6 +39,10 @@ def test_generate_twin_success(monkeypatch: pytest.MonkeyPatch) -> None:
             if isinstance(input, int):
                 return SimpleNamespace(final_output="extra_done")
             return SimpleNamespace(final_output='{"x": 1}')
+        if name == "SymbolicSolveAgent":
+            return SimpleNamespace(final_output="sym_solved")
+        if name == "SymbolicSimplifyAgent":
+            return SimpleNamespace(final_output="sym_simplified")
         if name == "StemChoiceAgent":
             return SimpleNamespace(final_output='{"twin_stem": "What is 1?", "choices": [1], "rationale": "r"}')
         if name == "FormatterAgent":
@@ -65,6 +69,9 @@ def test_generate_twin_success(monkeypatch: pytest.MonkeyPatch) -> None:
         "TemplateAgent",
         "QAAgent",
         "SampleAgent",
+        "QAAgent",
+        "SymbolicSolveAgent",
+        "SymbolicSimplifyAgent",
         "QAAgent",
         "QAAgent",
         "QAAgent",
