@@ -3,8 +3,14 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any
 
+import sys
+from pathlib import Path
+
 import pytest
-import twin_generator.pipeline as pipeline
+
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+
+import twin_generator.pipeline as pipeline  # noqa: E402
 
 
 def test_generate_twin_success(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -30,6 +36,8 @@ def test_generate_twin_success(monkeypatch: pytest.MonkeyPatch) -> None:
                     '"answer_index": 0, "answer_value": 1, "rationale": "r"}'
                 )
             )
+        if name == "QAAgent":
+            return SimpleNamespace(final_output="pass")
         raise AssertionError("unexpected agent")
 
     monkeypatch.setattr(pipeline.AgentsRunner, "run_sync", mock_run_sync)
@@ -39,11 +47,19 @@ def test_generate_twin_success(monkeypatch: pytest.MonkeyPatch) -> None:
     assert out.get("errors") == []
     assert calls == [
         "ParserAgent",
+        "QAAgent",
         "ConceptAgent",
+        "QAAgent",
         "TemplateAgent",
+        "QAAgent",
         "SampleAgent",
+        "QAAgent",
+        "QAAgent",
+        "QAAgent",
         "StemChoiceAgent",
+        "QAAgent",
         "FormatterAgent",
+        "QAAgent",
     ]
 
 
@@ -52,7 +68,9 @@ def test_generate_twin_agent_failure(monkeypatch: pytest.MonkeyPatch) -> None:
 
     def mock_run_sync(agent: Any, input: Any) -> SimpleNamespace:
         call_order.append(agent.name)
-        if len(call_order) == 3:
+        if agent.name == "QAAgent":
+            return SimpleNamespace(final_output="pass")
+        if agent.name == "TemplateAgent":
             raise RuntimeError("boom")
         return SimpleNamespace(final_output="ok")
 
@@ -61,6 +79,12 @@ def test_generate_twin_agent_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     out = pipeline.generate_twin("p", "s")
     assert out.get("error") == "TemplateAgent failed: boom"
     # ensure pipeline stopped early
-    assert call_order == ["ParserAgent", "ConceptAgent", "TemplateAgent"]
+    assert call_order == [
+        "ParserAgent",
+        "QAAgent",
+        "ConceptAgent",
+        "QAAgent",
+        "TemplateAgent",
+    ]
     assert "params" not in out
 

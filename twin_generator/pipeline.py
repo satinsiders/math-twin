@@ -13,6 +13,7 @@ from .agents import (
     ConceptAgent,
     FormatterAgent,
     ParserAgent,
+    QAAgent,
     SampleAgent,
     StemChoiceAgent,
     TemplateAgent,
@@ -42,19 +43,41 @@ class _Graph:
 
 
 class _Runner:
-    """Minimal re‑implementation of a sequential task executor."""
+    """Minimal re‑implementation of a sequential task executor with QA checks."""
 
-    def __init__(self, graph: _Graph, *, verbose: bool = False) -> None:
+    def __init__(
+        self, graph: _Graph, *, verbose: bool = False, qa_max_retries: int = 2
+    ) -> None:
         self.graph = graph
         self.verbose = verbose
+        self.qa_max_retries = qa_max_retries
 
     def run(self, inputs: dict[str, Any]) -> dict[str, Any]:  # noqa: ANN401 – generic return
         data = dict(inputs)
         for step in self.graph.steps:
-            if self.verbose:
-                name = step.__name__.replace("_step_", "").lstrip("_")
-                print(f"[twin-generator] {name}…")
-            data = step(data)
+            name = step.__name__.replace("_step_", "").lstrip("_")
+            attempts = 0
+            while True:
+                before = dict(data)
+                if self.verbose:
+                    print(f"[twin-generator] {name}…")
+                data = step(data)
+                if "error" in data:
+                    break
+                try:
+                    qa_in = json.dumps({"step": name, "data": data})
+                    qa_res = AgentsRunner.run_sync(QAAgent, input=qa_in)
+                    qa_out = get_final_output(qa_res).strip().lower()
+                except Exception as exc:  # pragma: no cover - defensive
+                    data["error"] = f"QAAgent failed: {exc}"
+                    break
+                if qa_out == "pass":
+                    break
+                attempts += 1
+                if attempts > self.qa_max_retries:
+                    data["error"] = f"QA failed for {name}: {qa_out}"
+                    break
+                data = before
             if "error" in data:
                 break
         return {"output": data}
