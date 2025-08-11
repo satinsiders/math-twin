@@ -57,6 +57,15 @@ FormatterAgent = Agent(
     model="gpt-4o",
 )
 
+QAAgent = Agent(
+    name="QAAgent",
+    instructions=(
+        "Validate the previous step's output for correctness and internal consistency. "
+        "Return 'pass' if the output is sound, otherwise return a brief reason.",
+    ),
+    model="gpt-4o",
+)
+
 __all__ = [
     "ParserAgent",
     "ConceptAgent",
@@ -64,5 +73,6 @@ __all__ = [
     "SampleAgent",
     "StemChoiceAgent",
     "FormatterAgent",
+    "QAAgent",
 ]
 
