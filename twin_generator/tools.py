@@ -84,23 +84,13 @@ def _render_graph(spec_json: str) -> str:
     ax.axvline(0, color="black", linewidth=1.5)
     ax.set_aspect("equal", adjustable="box")
 
-    # Make the visible range square no matter the data distribution
+    # Make the visible range adapt to the plotted data
     if points:
-        xs_f = [float(x) for x in xs]
-        ys_f = [float(y) for y in ys]
-        x_min, x_max = min(xs_f), max(xs_f)
-        y_min, y_max = min(ys_f), max(ys_f)
+        ax.relim()
+        ax.autoscale_view()
     else:
-        x_min = y_min = -1
-        x_max = y_max = 1
-
-    span = max(x_max - x_min, y_max - y_min) or 1  # avoid zero division
-    x_mid = (x_min + x_max) / 2
-    y_mid = (y_min + y_max) / 2
-    half = span / 2
-
-    ax.set_xlim(x_mid - half, x_mid + half)
-    ax.set_ylim(y_mid - half, y_mid + half)
+        ax.set_xlim(-1, 1)
+        ax.set_ylim(-1, 1)
 
     # --- move the axes spines to x=0, y=0 and hide the others ---
     ax.spines["left"].set_position(("data", 0))
