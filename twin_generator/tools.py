@@ -127,23 +127,87 @@ def _calc_answer(expression: str, params_json: str) -> Any:  # noqa: ANN401 –�
     * Falls back to numeric evaluation
     * Coerces near‑integers to ``int`` when appropriate
     """
+    import signal
+    from contextlib import contextmanager
+    from typing import Iterator
+
     import sympy as sp
+
     params = json.loads(params_json)
-    expr = sp.sympify(expression)
-    exact = expr.subs(params)
+
+    @contextmanager
+    def _time_limit(seconds: int) -> Iterator[None]:
+        def _handler(signum: int, frame: Any) -> None:  # noqa: ARG001
+            raise TimeoutError("timed out")
+
+        old_handler = signal.signal(signal.SIGALRM, _handler)
+        signal.setitimer(signal.ITIMER_REAL, float(seconds))
+        try:
+            yield
+        finally:
+            signal.setitimer(signal.ITIMER_REAL, 0.0)
+            signal.signal(signal.SIGALRM, old_handler)
+
+    def _make_safe(func: Any, fallback: Any) -> Any:
+        def _wrapper(*args: Any, **kwargs: Any) -> Any:
+            try:
+                with _time_limit(2):
+                    return func(*args, **kwargs)
+            except Exception:
+                return fallback(*args, **kwargs)
+
+        return _wrapper
+
+    local_ops = {
+        "diff": _make_safe(sp.diff, sp.Derivative),
+        "integrate": _make_safe(sp.integrate, sp.Integral),
+        "limit": _make_safe(sp.limit, sp.Limit),
+        "summation": _make_safe(sp.summation, sp.Sum),
+        "Derivative": _make_safe(lambda *a, **k: sp.Derivative(*a, **k).doit(), sp.Derivative),
+        "Integral": _make_safe(lambda *a, **k: sp.Integral(*a, **k).doit(), sp.Integral),
+        "Limit": _make_safe(lambda *a, **k: sp.Limit(*a, **k).doit(), sp.Limit),
+        "Sum": _make_safe(lambda *a, **k: sp.Sum(*a, **k).doit(), sp.Sum),
+    }
 
     try:
-        exact_simpl = sp.simplify(exact)
+        expr = sp.sympify(expression, locals=local_ops)
     except Exception:
-        exact_simpl = exact
+        expr = sp.sympify(expression)
 
-    # Symbolic → numeric when free symbols remain
+    def _eval_advanced(e: sp.Expr, depth: int = 0) -> sp.Expr:
+        if depth > 5:
+            return e
+        targets = list(e.atoms(sp.Derivative, sp.Integral, sp.Limit, sp.Sum))
+        if not targets:
+            return e
+        for t in targets:
+            try:
+                with _time_limit(2):
+                    res = t.doit()
+            except Exception:
+                res = t
+            e = e.xreplace({t: res})
+        return _eval_advanced(e, depth + 1)
+
+    expr = _eval_advanced(expr)
+    expr = expr.subs(params)
+    expr = _eval_advanced(expr)
+
+    try:
+        with _time_limit(5):
+            exact_simpl = sp.simplify(expr)
+    except Exception:
+        exact_simpl = expr
+
     if getattr(exact_simpl, "free_symbols", set()):
-        result = sp.N(exact_simpl)
+        try:
+            with _time_limit(2):
+                result = sp.N(exact_simpl)
+        except Exception:
+            result = exact_simpl
     else:
         result = exact_simpl
 
-    # Convert to Python primitives
     try:
         if result.is_integer:  # type: ignore[attr-defined]
             return int(result)  # type: ignore[misc]
