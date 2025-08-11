@@ -54,7 +54,10 @@ class _Runner:
 
     def run(self, inputs: dict[str, Any]) -> dict[str, Any]:  # noqa: ANN401 – generic return
         data = dict(inputs)
-        for step in self.graph.steps:
+        steps = list(self.graph.steps)
+        idx = 0
+        while idx < len(steps):
+            step = steps[idx]
             name = step.__name__.replace("_step_", "").lstrip("_")
             attempts = 0
             while True:
@@ -64,6 +67,7 @@ class _Runner:
                 data = step(data)
                 if "error" in data:
                     break
+                next_steps = data.pop("next_steps", None)
                 try:
                     qa_in = json.dumps({"step": name, "data": data})
                     qa_res = AgentsRunner.run_sync(QAAgent, input=qa_in)
@@ -72,6 +76,8 @@ class _Runner:
                     data["error"] = f"QAAgent failed: {exc}"
                     break
                 if qa_out == "pass":
+                    if next_steps:
+                        steps[idx + 1 : idx + 1] = next_steps
                     break
                 attempts += 1
                 if attempts > self.qa_max_retries:
@@ -80,6 +86,7 @@ class _Runner:
                 data = before
             if "error" in data:
                 break
+            idx += 1
         return {"output": data}
 
 
@@ -127,6 +134,62 @@ def _step_sample(data: dict[str, Any]) -> dict[str, Any]:
         data["params"] = safe_json(get_final_output(res))
     except Exception as exc:  # pragma: no cover - defensive
         data["error"] = f"SampleAgent failed: {exc}"
+    return data
+
+
+def _step_operations(data: dict[str, Any]) -> dict[str, Any]:
+    ops = data.get("template", {}).get("operations") or []
+    steps: list[Callable[[dict[str, Any]], dict[str, Any]]] = []
+    for idx, op in enumerate(ops):
+        kind = op.get("kind")
+        condition = op.get("condition")
+        if kind == "sympy":
+            expr = op.get("expr", "0")
+            out_key = op.get("output", f"sym_{idx}")
+
+            def _op_step(
+                d: dict[str, Any],
+                *,
+                _expr: str = expr,
+                _out: str = out_key,
+                _cond: str | None = condition,
+            ) -> dict[str, Any]:
+                if _cond and not d.get(cast(str, _cond)):
+                    return d
+                params = {k: v for k, v in d.items() if isinstance(v, (int, float, str))}
+                d[_out] = _calc_answer(_expr, json.dumps(params))
+                return d
+
+            _op_step.__name__ = f"_step_op_{idx}"
+            steps.append(_op_step)
+        elif kind == "agent":
+            agent_name = op.get("agent")
+            input_key = op.get("input_key")
+            out_key = op.get("output", f"agent_{idx}")
+
+            def _agent_step(
+                d: dict[str, Any],
+                *,
+                _agent_name: str = cast(str, agent_name),
+                _input_key: str = cast(str, input_key),
+                _out: str = out_key,
+                _cond: str | None = condition,
+            ) -> dict[str, Any]:
+                if _cond and not d.get(cast(str, _cond)):
+                    return d
+                agent = globals().get(_agent_name)
+                if agent is None:
+                    d["error"] = f"Unknown agent {_agent_name}"
+                    return d
+                res = AgentsRunner.run_sync(agent, input=d.get(_input_key))
+                d[_out] = get_final_output(res)
+                return d
+
+            _agent_step.__name__ = f"_step_op_{idx}"
+            steps.append(_agent_step)
+
+    if steps:
+        data["next_steps"] = steps
     return data
 
 
@@ -212,6 +275,7 @@ _PIPELINE = _Graph(
         _step_concept,
         _step_template,
         _step_sample,
+        _step_operations,
         _step_visual,
         _step_answer,
         _step_stem_choice,
