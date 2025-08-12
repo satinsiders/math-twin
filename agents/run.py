@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 
 class Runner:
@@ -45,7 +45,7 @@ class Runner:
         model = getattr(agent, "model", None) or "gpt-4o-mini"
         system_msg = getattr(agent, "instructions", "")
         user_msg = str(input)
-        messages = [
+        messages: list[dict[str, str]] = [
             {"role": "system", "content": system_msg},
             {"role": "user", "content": user_msg},
         ]
@@ -57,13 +57,18 @@ class Runner:
         if hasattr(openai, "OpenAI"):
             client = openai.OpenAI()
             if hasattr(client, "responses"):
-                resp = client.responses.create(model=model, input=messages)
+                resp = client.responses.create(
+                    model=model, input=cast(Any, messages)
+                )
                 final_output = getattr(resp, "output_text", str(resp))
             else:  # pragma: no cover - depends on library version
-                resp = client.chat.completions.create(model=model, messages=messages)
+                resp = client.chat.completions.create(
+                    model=model, messages=cast(Any, messages)
+                )
                 final_output = resp.choices[0].message["content"]
         else:  # pragma: no cover - legacy client
-            resp = openai.ChatCompletion.create(model=model, messages=messages)
+            chat_cls = getattr(openai, "ChatCompletion")  # type: ignore[attr-defined]
+            resp = chat_cls.create(model=model, messages=cast(Any, messages))
             final_output = resp.choices[0].message["content"]
 
         return SimpleNamespace(final_output=final_output)
