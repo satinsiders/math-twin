@@ -129,7 +129,12 @@ def test_generate_twin_qa_retry(monkeypatch: pytest.MonkeyPatch) -> None:
         if name == "StemChoiceAgent":
             return SimpleNamespace(final_output='{"twin_stem": "Q", "choices": [1], "rationale": "r"}')
         if name == "FormatterAgent":
-            return SimpleNamespace(final_output='{"twin_stem": "Q", "choices": [1], "answer_index": 0, "answer_value": 1, "rationale": "r"}')
+            return SimpleNamespace(
+                final_output=(
+                    '{"twin_stem": "Q", "choices": [1], '
+                    '"answer_index": 0, "answer_value": 1, "rationale": "r"}'
+                )
+            )
         if name == "QAAgent":
             # First QA check fails; subsequent ones pass
             return SimpleNamespace(final_output="fail" if call_counts[name] == 1 else "pass")
