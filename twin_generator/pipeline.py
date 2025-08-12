@@ -12,6 +12,7 @@ from .constants import GraphSpec
 from .agents import (
     ConceptAgent,
     FormatterAgent,
+    OperationsAgent,
     ParserAgent,
     QAAgent,
     SampleAgent,
@@ -24,6 +25,9 @@ from .tools import (
     _calc_answer,      # internal helper functions (NOT the FunctionTool wrappers!)
     _make_html_table,
     _render_graph,
+    calc_answer_tool,
+    make_html_table_tool,
+    render_graph_tool,
 )
 from .utils import (
     coerce_answers,
@@ -33,6 +37,9 @@ from .utils import (
 )
 
 __all__ = ["generate_twin"]
+
+
+_TOOLS = [calc_answer_tool, render_graph_tool, make_html_table_tool]
 
 
 # ---------------------------------------------------------------------------
@@ -90,7 +97,7 @@ class _Runner:
                     break
                 try:
                     qa_in = json.dumps({"step": name, "data": data})
-                    qa_res = AgentsRunner.run_sync(QAAgent, input=qa_in)
+                    qa_res = AgentsRunner.run_sync(QAAgent, input=qa_in, tools=_TOOLS)
                     qa_out = get_final_output(qa_res).strip().lower()
                 except Exception as exc:  # pragma: no cover - defensive
                     data["error"] = f"QAAgent failed: {exc}"
@@ -125,7 +132,11 @@ class _Runner:
 
 def _step_parse(data: dict[str, Any]) -> dict[str, Any]:
     try:
-        res = AgentsRunner.run_sync(ParserAgent, input=data["problem_text"] + "\n" + data["solution"])
+        res = AgentsRunner.run_sync(
+            ParserAgent,
+            input=data["problem_text"] + "\n" + data["solution"],
+            tools=_TOOLS,
+        )
         data["parsed"] = get_final_output(res)
     except Exception as exc:  # pragma: no cover - defensive
         data["error"] = f"ParserAgent failed: {exc}"
@@ -134,7 +145,11 @@ def _step_parse(data: dict[str, Any]) -> dict[str, Any]:
 
 def _step_concept(data: dict[str, Any]) -> dict[str, Any]:
     try:
-        res = AgentsRunner.run_sync(ConceptAgent, input=str(data["parsed"]))
+        res = AgentsRunner.run_sync(
+            ConceptAgent,
+            input=str(data["parsed"]),
+            tools=_TOOLS,
+        )
         data["concept"] = get_final_output(res)
     except Exception as exc:  # pragma: no cover - defensive
         data["error"] = f"ConceptAgent failed: {exc}"
@@ -146,6 +161,7 @@ def _step_template(data: dict[str, Any]) -> dict[str, Any]:
         res = AgentsRunner.run_sync(
             TemplateAgent,
             input=json.dumps({"parsed": data["parsed"], "concept": data["concept"]}),
+            tools=_TOOLS,
         )
         data["template"] = safe_json(get_final_output(res))
     except Exception as exc:  # pragma: no cover - defensive
@@ -158,6 +174,7 @@ def _step_sample(data: dict[str, Any]) -> dict[str, Any]:
         res = AgentsRunner.run_sync(
             SampleAgent,
             input=json.dumps({"template": data["template"]}),
+            tools=_TOOLS,
         )
         data["params"] = safe_json(get_final_output(res))
     except Exception as exc:  # pragma: no cover - defensive
@@ -168,9 +185,17 @@ def _step_sample(data: dict[str, Any]) -> dict[str, Any]:
 def _step_symbolic(data: dict[str, Any]) -> dict[str, Any]:
     try:
         payload = json.dumps({"template": data["template"], "params": data["params"]})
-        res = AgentsRunner.run_sync(SymbolicSolveAgent, input=payload)
+        res = AgentsRunner.run_sync(
+            SymbolicSolveAgent,
+            input=payload,
+            tools=_TOOLS,
+        )
         data["symbolic_solution"] = get_final_output(res)
-        res2 = AgentsRunner.run_sync(SymbolicSimplifyAgent, input=data["symbolic_solution"])
+        res2 = AgentsRunner.run_sync(
+            SymbolicSimplifyAgent,
+            input=data["symbolic_solution"],
+            tools=_TOOLS,
+        )
         data["symbolic_simplified"] = get_final_output(res2)
     except Exception as exc:  # pragma: no cover - defensive
         data["symbolic_error"] = f"Symbolic agents failed: {exc}"
@@ -179,69 +204,22 @@ def _step_symbolic(data: dict[str, Any]) -> dict[str, Any]:
 
 def _step_operations(data: dict[str, Any]) -> dict[str, Any]:
     ops = data.get("template", {}).get("operations") or []
-    steps: list[Callable[[dict[str, Any]], dict[str, Any]]] = []
-    for idx, op in enumerate(ops):
-        kind = op.get("kind")
-        condition = op.get("condition")
-        if kind == "sympy":
-            expr = op.get("expr", "0")
-            out_key = op.get("output", f"sym_{idx}")
-
-            def _op_step(
-                d: dict[str, Any],
-                *,
-                _expr: str = expr,
-                _out: str = out_key,
-                _cond: str | None = condition,
-            ) -> dict[str, Any]:
-                if _cond and not d.get(cast(str, _cond)):
-                    return d
-                params = {}
-                for k, v in d.items():
-                    if isinstance(v, (int, float)):
-                        params[k] = v
-                    elif isinstance(v, str):
-                        try:
-                            float(v)
-                            params[k] = float(v)
-                        except Exception:
-                            pass
-                d[_out] = _calc_answer(_expr, json.dumps(params))
-                return d
-
-            _op_step.__name__ = f"_step_op_{idx}"
-            steps.append(_op_step)
-        elif kind == "agent":
-            agent_name = op.get("agent")
-            input_key = op.get("input_key")
-            out_key = op.get("output", f"agent_{idx}")
-
-            def _agent_step(
-                d: dict[str, Any],
-                *,
-                _agent_name: str = cast(str, agent_name),
-                _input_key: str = cast(str, input_key),
-                _out: str = out_key,
-                _cond: str | None = condition,
-            ) -> dict[str, Any]:
-                if _cond and not d.get(cast(str, _cond)):
-                    return d
-                agent = globals().get(_agent_name)
-                if agent is None:
-                    d["error"] = f"Unknown agent {_agent_name}"
-                    return d
-                res = AgentsRunner.run_sync(agent, input=d.get(_input_key))
-                d[_out] = get_final_output(res)
-                return d
-
-            _agent_step.__name__ = f"_step_op_{idx}"
-            steps.append(_agent_step)
-
-    if steps:
-        data["next_steps"] = steps
-    else:
-        # No operations to perform; skip QA for this no-op step
+    if not ops:
         data["skip_qa"] = True
+        return data
+
+    payload = json.dumps({"data": data, "operations": ops})
+    try:
+        res = AgentsRunner.run_sync(
+            OperationsAgent,
+            input=payload,
+            tools=_TOOLS,
+        )
+        out = safe_json(get_final_output(res))
+        if isinstance(out, dict):
+            data.update(out)
+    except Exception as exc:  # pragma: no cover - defensive
+        data["error"] = f"OperationsAgent failed: {exc}"
     return data
 
 
@@ -282,7 +260,11 @@ def _step_stem_choice(data: dict[str, Any]) -> dict[str, Any]:
         payload["table_html"] = data["table_html"]
 
     try:
-        res = AgentsRunner.run_sync(StemChoiceAgent, input=json.dumps(payload))
+        res = AgentsRunner.run_sync(
+            StemChoiceAgent,
+            input=json.dumps(payload),
+            tools=_TOOLS,
+        )
         data["stem_data"] = safe_json(get_final_output(res))
     except Exception as exc:  # pragma: no cover - defensive
         data["error"] = f"StemChoiceAgent failed: {exc}"
@@ -304,7 +286,11 @@ def _step_format(data: dict[str, Any]) -> dict[str, Any]:
         payload["table_html"] = data["table_html"]
 
     try:
-        res = AgentsRunner.run_sync(FormatterAgent, input=json.dumps(payload))
+        res = AgentsRunner.run_sync(
+            FormatterAgent,
+            input=json.dumps(payload),
+            tools=_TOOLS,
+        )
         out = safe_json(get_final_output(res))
     except Exception as exc:  # pragma: no cover - defensive
         data["error"] = f"FormatterAgent failed: {exc}"
