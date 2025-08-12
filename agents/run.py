@@ -7,20 +7,20 @@ from typing import Any, cast, Sequence
 
 
 class Runner:
-    """Minimal runner that executes an :class:`Agent` via the OpenAI API.
+    """Minimal runner that executes an :class:`Agent` via the OpenAI *Responses* API.
 
     The real project this repository was extracted from relies on the
-    `openai` package to execute small helper agents.  The original implementation
-    is intentionally tiny – the goal is simply to take an ``Agent`` instance and
-    a piece of ``input`` and return the model's textual output.  The tests for
-    this kata monkeypatch :func:`run_sync`, so the runner needs to be small and
-    dependency free at import time while still working when used in practice.
+    ``openai`` package to execute small helper agents.  The original
+    implementation is intentionally tiny – the goal is simply to take an
+    ``Agent`` instance and a piece of ``input`` and return the model's textual
+    output.  The tests for this kata monkeypatch :func:`run_sync`, so the runner
+    needs to be small and dependency free at import time while still working
+    when used in practice.
 
-    The method below attempts to import ``openai`` lazily so importing the
-    package does not require the dependency.  When invoked it uses whichever API
-    surface is available (``responses.create`` for newer versions or
-    ``chat.completions.create``/``ChatCompletion.create`` for older ones) and
-    always returns an object with a ``final_output`` attribute.
+    Only the modern Responses API is supported.  Older Chat Completions
+    interfaces have been removed to ensure the project targets the Agents SDK
+    and Responses API exclusively.  The method always returns an object with a
+    ``final_output`` attribute containing the model's response.
     """
 
     @staticmethod
@@ -49,6 +49,17 @@ class Runner:
         except Exception as exc:  # pragma: no cover - defensive
             raise RuntimeError("openai package is required to run agents") from exc
 
+        if not hasattr(openai, "OpenAI"):
+            raise RuntimeError(
+                "openai.OpenAI client with Responses API support is required"
+            )
+
+        client: Any = openai.OpenAI()
+        if not hasattr(client, "responses"):
+            raise RuntimeError(
+                "openai client does not support Responses API; upgrade your package"
+            )
+
         model = getattr(agent, "model", None) or "gpt-4o-mini"
         system_msg = getattr(agent, "instructions", "")
         user_msg = str(input)
@@ -57,36 +68,13 @@ class Runner:
             {"role": "user", "content": user_msg},
         ]
 
-        final_output: str
-
-        # The OpenAI python client went through multiple API styles.  We try the
-        # modern one first, falling back to older interfaces.
-        if hasattr(openai, "OpenAI"):
-            client: Any = openai.OpenAI()
-            if hasattr(client, "responses"):
-                kwargs: dict[str, Any] = {
-                    "model": model,
-                    "input": cast(Any, messages),
-                }
-                if tools:
-                    kwargs["tools"] = list(tools)
-                resp: Any = client.responses.create(**kwargs)
-                final_output = getattr(resp, "output_text", str(resp))
-            else:  # pragma: no cover - depends on library version
-                kwargs = {
-                    "model": model,
-                    "messages": cast(Any, messages),
-                }
-                if tools:
-                    kwargs["tools"] = list(tools)
-                resp = cast(Any, client.chat.completions.create(**kwargs))
-                final_output = resp.choices[0].message["content"]
-        else:  # pragma: no cover - legacy client
-            chat_cls = getattr(openai, "ChatCompletion")  # type: ignore[attr-defined]
-            kwargs = {"model": model, "messages": cast(Any, messages)}
-            if tools:
-                kwargs["functions"] = [t["function"] for t in tools]
-            resp = cast(Any, chat_cls.create(**kwargs))
-            final_output = resp.choices[0].message["content"]
+        kwargs: dict[str, Any] = {
+            "model": model,
+            "input": cast(Any, messages),
+        }
+        if tools:
+            kwargs["tools"] = list(tools)
+        resp: Any = client.responses.create(**kwargs)
+        final_output = getattr(resp, "output_text", str(resp))
 
         return SimpleNamespace(final_output=final_output)
