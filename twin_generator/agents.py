@@ -8,7 +8,7 @@ ParserAgent = Agent(
         "relations, constraints, any visuals, and the answer format, ensuring coverage through "
         "extremely advanced math operations."
     ),
-    model="gpt-4o",
+    model="gpt-5-mini",
 )
 
 ConceptAgent = Agent(
@@ -17,7 +17,7 @@ ConceptAgent = Agent(
         "From the parsed JSON, identify the key concept(s) and outline the canonical "
         "solution path in ordered steps, ensuring coverage through extremely advanced math operations."
     ),
-    model="gpt-4o",
+    model="gpt-5-mini",
 )
 
 TemplateAgent = Agent(
@@ -26,7 +26,7 @@ TemplateAgent = Agent(
         "Replace literals with symbols; provide domains; include a `visual` field "
         "→ {type: none|graph|table, data: {…}}, ensuring coverage through extremely advanced math operations."
     ),
-    model="gpt-4o",
+    model="gpt-5-mini",
 )
 
 SampleAgent = Agent(
@@ -36,7 +36,7 @@ SampleAgent = Agent(
         "parameter set and compute output. Return only the parameter mapping "
         "as valid JSON without any prose, ensuring coverage through extremely advanced math operations."
     ),
-    model="gpt-4o",
+    model="gpt-5-mini",
 )
 
 StemChoiceAgent = Agent(
@@ -46,7 +46,7 @@ StemChoiceAgent = Agent(
         "that tests the same concept but with surface variation. Return only JSON with keys: "
         "twin_stem, choices[], rationale, ensuring coverage through extremely advanced math operations."
     ),
-    model="gpt-4o",
+    model="gpt-5-mini",
 )
 
 FormatterAgent = Agent(
@@ -56,7 +56,7 @@ FormatterAgent = Agent(
         "answer_value, rationale, graph_path?, table_html?. Validate internal consistency while "
         "ensuring coverage through extremely advanced math operations."
     ),
-    model="gpt-4o",
+    model="gpt-5-mini",
 )
 
 QAAgent = Agent(
@@ -65,7 +65,7 @@ QAAgent = Agent(
         "Validate the previous step's output for correctness and internal consistency, ensuring coverage through "
         "extremely advanced math operations. Return 'pass' if the output is sound, otherwise return a brief reason."
     ),
-    model="gpt-4o",
+    model="gpt-5-mini",
 )
 
 SymbolicSolveAgent = Agent(
@@ -74,7 +74,7 @@ SymbolicSolveAgent = Agent(
         "Handle heavy symbolic equation solving tasks with precision, ensuring coverage through "
         "extremely advanced math operations."
     ),
-    model="gpt-4o",
+    model="gpt-5-mini",
 )
 
 SymbolicSimplifyAgent = Agent(
@@ -83,7 +83,7 @@ SymbolicSimplifyAgent = Agent(
         "Perform deep symbolic simplification and manipulation while ensuring coverage through "
         "extremely advanced math operations."
     ),
-    model="gpt-4o",
+    model="gpt-5-mini",
 )
 
 __all__ = [
