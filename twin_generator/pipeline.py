@@ -224,11 +224,14 @@ def _step_operations(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def _step_visual(data: dict[str, Any]) -> dict[str, Any]:
-    visual = data.get("template", {}).get("visual") or {"type": "none"}
+    visual = data.get("template", {}).get("visual")
+    if not isinstance(visual, dict):
+        visual = {"type": "none"}
     force = bool(data.get("force_graph"))
     user_spec = data.get("graph_spec")
 
-    if visual.get("type") == "graph":
+    vtype = visual.get("type")
+    if vtype == "graph":
         spec = visual.get("data", {}) or C.DEFAULT_GRAPH_SPEC
         data["graph_path"] = _render_graph(json.dumps(spec))
         return data
@@ -238,7 +241,7 @@ def _step_visual(data: dict[str, Any]) -> dict[str, Any]:
         data["graph_path"] = _render_graph(json.dumps(gspec))
         return data
 
-    if visual.get("type") == "table":
+    if vtype == "table":
         data["table_html"] = _make_html_table(json.dumps(visual.get("data", {})))
     return data
 

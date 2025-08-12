@@ -142,3 +142,9 @@ def test_generate_twin_qa_retry(monkeypatch: pytest.MonkeyPatch) -> None:
     # QAAgent called once per step plus the extra retry (total 10)
     assert call_counts.get("QAAgent") == 10
 
+
+def test_step_visual_handles_non_dict() -> None:
+    data = {"template": {"visual": "not-a-dict"}}
+    out = pipeline._step_visual(dict(data))
+    assert out == data
+
