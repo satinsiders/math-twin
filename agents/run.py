@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from typing import Any, cast
+from typing import Any, cast, Sequence
 
 
 class Runner:
@@ -24,7 +24,12 @@ class Runner:
     """
 
     @staticmethod
-    def run_sync(agent: Any, input: Any) -> Any:  # pragma: no cover - exercised via mocks
+    def run_sync(
+        agent: Any,
+        input: Any,
+        *,
+        tools: Sequence[Any] | None = None,
+    ) -> Any:  # pragma: no cover - exercised via mocks
         """Execute ``agent`` with ``input`` and return a namespace containing
         the model's response in ``final_output``.
 
@@ -35,6 +40,8 @@ class Runner:
         input:
             Data passed to the agent.  It is converted to ``str`` and used as the
             user prompt.
+        tools:
+            Optional collection of OpenAI tool definitions the model may call.
         """
 
         try:  # Import lazily so the dependency is optional for testing.
@@ -57,18 +64,29 @@ class Runner:
         if hasattr(openai, "OpenAI"):
             client: Any = openai.OpenAI()
             if hasattr(client, "responses"):
-                resp: Any = client.responses.create(
-                    model=model, input=cast(Any, messages)
-                )
+                kwargs: dict[str, Any] = {
+                    "model": model,
+                    "input": cast(Any, messages),
+                }
+                if tools:
+                    kwargs["tools"] = list(tools)
+                resp: Any = client.responses.create(**kwargs)
                 final_output = getattr(resp, "output_text", str(resp))
             else:  # pragma: no cover - depends on library version
-                resp = cast(Any, client.chat.completions.create(
-                    model=model, messages=cast(Any, messages)
-                ))
+                kwargs = {
+                    "model": model,
+                    "messages": cast(Any, messages),
+                }
+                if tools:
+                    kwargs["tools"] = list(tools)
+                resp = cast(Any, client.chat.completions.create(**kwargs))
                 final_output = resp.choices[0].message["content"]
         else:  # pragma: no cover - legacy client
             chat_cls = getattr(openai, "ChatCompletion")  # type: ignore[attr-defined]
-            resp = cast(Any, chat_cls.create(model=model, messages=cast(Any, messages)))
+            kwargs = {"model": model, "messages": cast(Any, messages)}
+            if tools:
+                kwargs["functions"] = [t["function"] for t in tools]
+            resp = cast(Any, chat_cls.create(**kwargs))
             final_output = resp.choices[0].message["content"]
 
         return SimpleNamespace(final_output=final_output)

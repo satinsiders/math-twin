@@ -16,7 +16,7 @@ import twin_generator.pipeline as pipeline  # noqa: E402
 def test_generate_twin_success(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = []
 
-    def mock_run_sync(agent: Any, input: Any) -> SimpleNamespace:
+    def mock_run_sync(agent: Any, input: Any, tools: Any | None = None) -> SimpleNamespace:
         calls.append(agent.name)
         name = agent.name
         if name == "ParserAgent":
@@ -27,22 +27,17 @@ def test_generate_twin_success(monkeypatch: pytest.MonkeyPatch) -> None:
             return SimpleNamespace(
                 final_output=(
                     '{"visual": {"type": "none"}, "answer_expression": "x", '
-                    '"operations": ['
-                    '{"kind": "sympy", "expr": "1", "output": "run_agent"}, '
-                    '{"kind": "agent", "agent": "SampleAgent", '
-                    '"input_key": "run_agent", "output": "extra", '
-                    '"condition": "run_agent"}'
-                    ']}'
+                    '"operations": [{"expr": "1", "output": "run_agent"}]}'
                 )
             )
         if name == "SampleAgent":
-            if isinstance(input, int):
-                return SimpleNamespace(final_output="extra_done")
             return SimpleNamespace(final_output='{"x": 1}')
         if name == "SymbolicSolveAgent":
             return SimpleNamespace(final_output="sym_solved")
         if name == "SymbolicSimplifyAgent":
             return SimpleNamespace(final_output="sym_simplified")
+        if name == "OperationsAgent":
+            return SimpleNamespace(final_output='{"run_agent": 1}')
         if name == "StemChoiceAgent":
             return SimpleNamespace(final_output='{"twin_stem": "What is 1?", "choices": [1], "rationale": "r"}')
         if name == "FormatterAgent":
@@ -73,9 +68,7 @@ def test_generate_twin_success(monkeypatch: pytest.MonkeyPatch) -> None:
         "SymbolicSolveAgent",
         "SymbolicSimplifyAgent",
         "QAAgent",
-        "QAAgent",
-        "QAAgent",
-        "SampleAgent",
+        "OperationsAgent",
         "QAAgent",
         "QAAgent",
         "QAAgent",
@@ -89,7 +82,7 @@ def test_generate_twin_success(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_generate_twin_agent_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     call_order = []
 
-    def mock_run_sync(agent: Any, input: Any) -> SimpleNamespace:
+    def mock_run_sync(agent: Any, input: Any, tools: Any | None = None) -> SimpleNamespace:
         call_order.append(agent.name)
         if agent.name == "QAAgent":
             return SimpleNamespace(final_output="pass")
@@ -115,7 +108,7 @@ def test_generate_twin_agent_failure(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_generate_twin_qa_retry(monkeypatch: pytest.MonkeyPatch) -> None:
     call_counts: dict[str, int] = {}
 
-    def mock_run_sync(agent: Any, input: Any) -> SimpleNamespace:
+    def mock_run_sync(agent: Any, input: Any, tools: Any | None = None) -> SimpleNamespace:
         name = agent.name
         call_counts[name] = call_counts.get(name, 0) + 1
         if name == "ParserAgent":

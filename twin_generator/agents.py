@@ -86,6 +86,15 @@ SymbolicSimplifyAgent = Agent(
     model="gpt-5-mini",
 )
 
+OperationsAgent = Agent(
+    name="OperationsAgent",
+    instructions=(
+        "Given the current pipeline data and a list of operations, invoke any provided tools "
+        "to compute intermediate results. Return only JSON with any newly derived fields."
+    ),
+    model="gpt-5-mini",
+)
+
 __all__ = [
     "ParserAgent",
     "ConceptAgent",
@@ -96,4 +105,5 @@ __all__ = [
     "QAAgent",
     "SymbolicSolveAgent",
     "SymbolicSimplifyAgent",
+    "OperationsAgent",
 ]
