@@ -55,20 +55,20 @@ class Runner:
         # The OpenAI python client went through multiple API styles.  We try the
         # modern one first, falling back to older interfaces.
         if hasattr(openai, "OpenAI"):
-            client = openai.OpenAI()
+            client: Any = openai.OpenAI()
             if hasattr(client, "responses"):
-                resp = client.responses.create(
+                resp: Any = client.responses.create(
                     model=model, input=cast(Any, messages)
                 )
                 final_output = getattr(resp, "output_text", str(resp))
             else:  # pragma: no cover - depends on library version
-                resp = client.chat.completions.create(
+                resp = cast(Any, client.chat.completions.create(
                     model=model, messages=cast(Any, messages)
-                )
+                ))
                 final_output = resp.choices[0].message["content"]
         else:  # pragma: no cover - legacy client
             chat_cls = getattr(openai, "ChatCompletion")  # type: ignore[attr-defined]
-            resp = chat_cls.create(model=model, messages=cast(Any, messages))
+            resp = cast(Any, chat_cls.create(model=model, messages=cast(Any, messages)))
             final_output = resp.choices[0].message["content"]
 
         return SimpleNamespace(final_output=final_output)
