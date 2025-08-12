@@ -43,23 +43,13 @@ def function_tool(func: F) -> dict[str, Any]:
     if required:
         schema["required"] = required
 
-    # Newer versions of the OpenAI client expect tool definitions to include a
-    # top‑level ``name`` field (in addition to ``type``) whereas the older
-    # ChatCompletions API expects the legacy ``{"function": {...}}`` structure.
-    #
-    # To remain compatible with both surfaces we provide the ``name`` and
-    # ``description`` at the top level while also embedding the classic
-    # ``function`` payload so the fallback code path can continue extracting
-    # ``t["function"]`` when needed.
+    # The OpenAI Responses/Agents APIs expect a top-level ``name`` field for
+    # each tool in addition to the ``type`` and ``parameters`` schema.
     name = func.__name__
     description = func.__doc__ or ""
     return {
+        "type": "function",
         "name": name,
         "description": description,
-        "type": "function",
-        "function": {
-            "name": name,
-            "description": description,
-            "parameters": schema,
-        },
+        "parameters": schema,
     }
