@@ -75,11 +75,19 @@ class _Runner:
             while True:
                 before = dict(data)
                 if self.verbose:
-                    print(f"[twin-generator] {name} attempt {attempts + 1}")
+                    print(
+                        f"[twin-generator] step {idx + 1}/{len(steps)}: {name} "
+                        f"attempt {attempts + 1}"
+                    )
                 data = step(data)
+                skip_qa = bool(data.pop("skip_qa", False))
                 if "error" in data:
                     break
                 next_steps = data.pop("next_steps", None)
+                if skip_qa:
+                    if next_steps:
+                        steps[idx + 1 : idx + 1] = next_steps
+                    break
                 try:
                     qa_in = json.dumps({"step": name, "data": data})
                     qa_res = AgentsRunner.run_sync(QAAgent, input=qa_in)
@@ -89,7 +97,8 @@ class _Runner:
                     break
                 if self.verbose:
                     print(
-                        f"[twin-generator] {name} QA round {attempts + 1}: {qa_out}"
+                        f"[twin-generator] step {idx + 1}/{len(steps)}: {name} "
+                        f"QA round {attempts + 1}: {qa_out}"
                     )
                 if qa_out == "pass":
                     if next_steps:
@@ -230,6 +239,9 @@ def _step_operations(data: dict[str, Any]) -> dict[str, Any]:
 
     if steps:
         data["next_steps"] = steps
+    else:
+        # No operations to perform; skip QA for this no-op step
+        data["skip_qa"] = True
     return data
 
 
