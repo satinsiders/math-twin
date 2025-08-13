@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from typing import Any, cast, Sequence
+from typing import Any, Sequence, cast
+
+import json
+
+from twin_generator import tools as tg_tools
 
 
 class Runner:
@@ -72,9 +76,45 @@ class Runner:
             "model": model,
             "input": cast(Any, messages),
         }
+        tool_map: dict[str, Any] = {}
         if tools:
             kwargs["tools"] = list(tools)
+            for t in tools:
+                name = t.get("name") if isinstance(t, dict) else None
+                if isinstance(name, str):
+                    fn = getattr(tg_tools, name, None)
+                    if callable(fn):
+                        tool_map[name] = fn
+
         resp: Any = client.responses.create(**kwargs)
+
+        while getattr(resp, "required_action", None):
+            action = resp.required_action
+            if getattr(action, "type", None) != "submit_tool_outputs":
+                break
+            submit = action.submit_tool_outputs
+            calls = getattr(submit, "tool_calls", [])
+            outputs: list[dict[str, str]] = []
+            for call in calls:
+                func = getattr(call, "function", None)
+                if func is None:
+                    continue
+                name = getattr(func, "name", "")
+                args_json = getattr(func, "arguments", "{}")
+                args = json.loads(args_json)
+                fn = tool_map.get(name)
+                if fn is None:
+                    raise RuntimeError(f"unknown tool requested: {name}")
+                result = fn(**args)
+                outputs.append({
+                    "tool_call_id": getattr(call, "id", ""),
+                    "output": str(result),
+                })
+            resp = client.responses.submit_tool_outputs(
+                response_id=getattr(resp, "id"),
+                tool_outputs=outputs,
+            )
+
         final_output = getattr(resp, "output_text", str(resp))
 
         return SimpleNamespace(final_output=final_output)
