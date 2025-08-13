@@ -13,8 +13,12 @@ from typing import Any, cast
 
 def get_final_output(res: Any) -> str:  # noqa: ANN401 – generic return
     """Extract the best‑guess textual payload from an Agents SDK response."""
-    out = getattr(res, "final_output", None) or getattr(res, "output", None) or getattr(res, "content", None) or res
-    return str(out)
+    for attr in ("final_output", "output", "content"):
+        if hasattr(res, attr):
+            val = getattr(res, attr)
+            if val is not None:
+                return str(val)
+    return str(res)
 
 
 # ---------------------------------------------------------------------------
@@ -23,6 +27,10 @@ def get_final_output(res: Any) -> str:  # noqa: ANN401 – generic return
 
 def safe_json(text: str) -> dict[str, Any]:
     """Best‑effort JSON repair loader with fenced‑code and bracket fallbacks."""
+    text = text.strip()
+    if not text:
+        raise ValueError("Agent output was empty")
+
     fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
     if fenced:
         text = fenced.group(1)

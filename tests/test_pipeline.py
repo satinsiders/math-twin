@@ -105,6 +105,22 @@ def test_generate_twin_agent_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "params" not in out
 
 
+def test_generate_twin_template_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    """TemplateAgent returning empty output should surface a clear error."""
+
+    def mock_run_sync(agent: Any, input: Any, tools: Any | None = None) -> SimpleNamespace:
+        if agent.name == "QAAgent":
+            return SimpleNamespace(final_output="pass")
+        if agent.name == "TemplateAgent":
+            return SimpleNamespace(final_output="")
+        return SimpleNamespace(final_output="ok")
+
+    monkeypatch.setattr(pipeline.AgentsRunner, "run_sync", mock_run_sync)
+
+    out = pipeline.generate_twin("p", "s")
+    assert out.get("error") == "TemplateAgent failed: Agent output was empty"
+
+
 def test_generate_twin_qa_retry(monkeypatch: pytest.MonkeyPatch) -> None:
     call_counts: dict[str, int] = {}
 
