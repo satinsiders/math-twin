@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
-from typing import Any, cast, Sequence
+from typing import Any, Sequence, cast
 
 
 class Runner:
@@ -75,6 +76,55 @@ class Runner:
         if tools:
             kwargs["tools"] = list(tools)
         resp: Any = client.responses.create(**kwargs)
+
+        # Build mapping of tool names to callable functions from ``twin_generator.tools``
+        tool_funcs: dict[str, Any] = {}
+        try:  # Import lazily to avoid heavy deps when not needed
+            from twin_generator import tools as _tg_tools
+
+            for attr in dir(_tg_tools):
+                if attr.endswith("_tool"):
+                    spec = getattr(_tg_tools, attr)
+                    if isinstance(spec, dict):
+                        name = spec.get("name")
+                    else:  # pragma: no cover - defensive
+                        name = getattr(spec, "name", None)
+                    func = getattr(_tg_tools, str(name), None)
+                    if func:
+                        tool_funcs[attr] = func
+                        tool_funcs[str(name)] = func
+        except Exception:  # pragma: no cover - defensive
+            pass
+
+        # Loop while the API requires tool outputs or is still processing
+        while getattr(resp, "status", None) != "completed":
+            required = getattr(resp, "required_action", None)
+            if required:
+                submit = getattr(required, "submit_tool_outputs", None)
+                tool_calls = [] if submit is None else getattr(submit, "tool_calls", [])
+                outputs: list[dict[str, str]] = []
+                for call in tool_calls:
+                    func_info = getattr(call, "function", None)
+                    name = getattr(func_info, "name", None) if func_info else None
+                    args_json = (
+                        getattr(func_info, "arguments", "{}") if func_info else "{}"
+                    )
+                    args = json.loads(args_json)
+                    func = tool_funcs.get(str(name))
+                    if not func:
+                        raise RuntimeError(f"tool {name!r} not implemented")
+                    result = func(**args)
+                    call_id = getattr(call, "id", None)
+                    outputs.append(
+                        {"tool_call_id": str(call_id), "output": str(result)}
+                    )
+                resp = client.responses.submit_tool_outputs(
+                    response_id=getattr(resp, "id"),
+                    tool_outputs=outputs,
+                )
+            else:
+                resp = client.responses.get(getattr(resp, "id"))
+
         final_output = getattr(resp, "output_text", str(resp))
 
         return SimpleNamespace(final_output=final_output)
