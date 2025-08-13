@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 from typing import Any, cast, Sequence
 
@@ -72,9 +73,39 @@ class Runner:
             "model": model,
             "input": cast(Any, messages),
         }
+
+        tool_map: dict[str, Any] = {}
         if tools:
-            kwargs["tools"] = list(tools)
+            sanitized: list[dict[str, Any]] = []
+            for t in tools:
+                name = t.get("name")
+                if name:
+                    tool_map[name] = t
+                sanitized.append({k: v for k, v in t.items() if not k.startswith("_")})
+            kwargs["tools"] = sanitized
+
         resp: Any = client.responses.create(**kwargs)
+
+        while getattr(resp, "status", None) == "requires_action":
+            action = getattr(resp, "required_action")
+            submit = getattr(action, "submit_tool_outputs")
+            calls = getattr(submit, "tool_calls", [])
+            outputs = []
+            for call in calls:
+                name = cast(str, getattr(call.function, "name"))
+                tool = tool_map.get(name)
+                if not tool:
+                    raise RuntimeError(f"tool {name} not provided")
+                func = tool.get("_func")
+                if not callable(func):
+                    raise RuntimeError(f"tool {name} is missing callable")
+                args = json.loads(getattr(call.function, "arguments", "{}"))
+                result = func(**args)
+                outputs.append({"tool_call_id": call.id, "output": str(result)})
+            resp = client.responses.submit_tool_outputs(
+                response_id=resp.id, tool_outputs=outputs
+            )
+
         final_output = getattr(resp, "output_text", str(resp))
 
         return SimpleNamespace(final_output=final_output)

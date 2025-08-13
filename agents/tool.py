@@ -52,4 +52,5 @@ def function_tool(func: F) -> dict[str, Any]:
         "name": name,
         "description": description,
         "parameters": schema,
+        "_func": func,
     }
