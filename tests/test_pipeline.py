@@ -121,6 +121,27 @@ def test_generate_twin_template_empty(monkeypatch: pytest.MonkeyPatch) -> None:
     assert out.get("error") == "TemplateAgent failed: Agent output was empty"
 
 
+def test_template_agent_not_given_render_graph_tool(monkeypatch: pytest.MonkeyPatch) -> None:
+    """TemplateAgent should not receive the render_graph tool."""
+    from twin_generator.tools import render_graph_tool
+
+    provided_tools: list[Any] | None = None
+
+    def mock_run_sync(agent: Any, input: Any, tools: Any | None = None) -> SimpleNamespace:
+        nonlocal provided_tools
+        if agent.name == "QAAgent":
+            return SimpleNamespace(final_output="pass")
+        if agent.name == "TemplateAgent":
+            provided_tools = tools
+        return SimpleNamespace(final_output='{"visual": {"type": "none"}, "answer_expression": "0"}')
+
+    monkeypatch.setattr(pipeline.AgentsRunner, "run_sync", mock_run_sync)
+
+    pipeline.generate_twin("p", "s")
+    assert provided_tools is not None
+    assert render_graph_tool not in provided_tools
+
+
 def test_generate_twin_qa_retry(monkeypatch: pytest.MonkeyPatch) -> None:
     call_counts: dict[str, int] = {}
 

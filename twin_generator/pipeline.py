@@ -39,7 +39,11 @@ from .utils import (
 __all__ = ["generate_twin"]
 
 
+# Tools exposed to most agents.  ``render_graph_tool`` is intentionally **omitted**
+# from the TemplateAgent to avoid cases where the agent calls the tool and then
+# fails to emit the actual template body (leading to an empty output error).
 _TOOLS = [calc_answer_tool, render_graph_tool, make_html_table_tool]
+_TEMPLATE_TOOLS = [calc_answer_tool, make_html_table_tool]
 
 
 # ---------------------------------------------------------------------------
@@ -161,7 +165,7 @@ def _step_template(data: dict[str, Any]) -> dict[str, Any]:
         res = AgentsRunner.run_sync(
             TemplateAgent,
             input=json.dumps({"parsed": data["parsed"], "concept": data["concept"]}),
-            tools=_TOOLS,
+            tools=_TEMPLATE_TOOLS,
         )
         data["template"] = safe_json(get_final_output(res))
     except Exception as exc:  # pragma: no cover - defensive
