@@ -40,9 +40,9 @@ __all__ = ["generate_twin"]
 
 
 # Default tools available to most agents.  TemplateAgent is intentionally given
-# a more restrictive list that excludes ``render_graph_tool``.
+# a more restrictive list that excludes ``render_graph_tool`` and ``make_html_table_tool``.
 _TOOLS = [calc_answer_tool, render_graph_tool, make_html_table_tool]
-_TEMPLATE_TOOLS = [calc_answer_tool, make_html_table_tool]
+_TEMPLATE_TOOLS = [calc_answer_tool]
 
 
 # ---------------------------------------------------------------------------
