@@ -65,23 +65,63 @@ _JSON_STEPS = {
 }
 
 
-def run_json_agent(
+def invoke_agent(
     agent: Any,
     payload: str,
     *,
     tools: list[Any] | None = None,
+    expect_json: bool = True,
     max_retries: int = _JSON_MAX_RETRIES,
-) -> dict[str, Any]:
-    """Execute an agent expecting JSON output with retry logic."""
+) -> tuple[Any | None, str | None]:
+    """Run an agent and parse its output.
+
+    Parameters
+    ----------
+    agent:
+        Agent instance to execute via ``AgentsRunner.run_sync``.
+    payload:
+        Textual input supplied to the agent.
+    tools:
+        Optional list of tools passed through to the agent runner.
+    expect_json:
+        When ``True`` the agent's final output is parsed as JSON using
+        :func:`safe_json`.
+    max_retries:
+        Number of attempts to retry the agent when JSON parsing fails.
+
+    Returns
+    -------
+    tuple
+        ``(result, error)`` where ``result`` is the parsed JSON object or raw
+        string returned by the agent and ``error`` is an error message when the
+        invocation fails or ``None`` on success.
+
+    Error Semantics
+    ---------------
+    * Exceptions raised by ``AgentsRunner.run_sync`` are captured and surfaced
+      as ``"<AgentName> failed: <exc>"``.
+    * If ``expect_json`` is ``True`` and the output cannot be parsed after
+      ``max_retries`` attempts, the returned error follows the same format.
+    """
+
+    agent_name = getattr(agent, "name", getattr(agent, "__name__", str(agent)))
     attempts = 0
     while True:
-        res = AgentsRunner.run_sync(agent, input=payload, tools=tools)
         try:
-            return safe_json(get_final_output(res))
-        except ValueError:
+            res = AgentsRunner.run_sync(agent, input=payload, tools=tools)
+        except Exception as exc:  # pragma: no cover - defensive
+            return None, f"{agent_name} failed: {exc}"
+
+        out = get_final_output(res)
+        if not expect_json:
+            return out, None
+
+        try:
+            return safe_json(out), None
+        except ValueError as exc:
             attempts += 1
             if attempts >= max_retries:
-                raise
+                return None, f"{agent_name} failed: {exc}"
 
 
 # ---------------------------------------------------------------------------
@@ -223,98 +263,80 @@ class _Runner:
 
 
 def _step_parse(data: dict[str, Any]) -> dict[str, Any]:
-    try:
-        res = AgentsRunner.run_sync(
-            ParserAgent,
-            input=data["problem_text"] + "\n" + data["solution"],
-            tools=_TOOLS,
-        )
-    except Exception as exc:  # pragma: no cover - defensive
-        data["error"] = f"ParserAgent failed: {exc}"
+    out, err = invoke_agent(
+        ParserAgent,
+        data["problem_text"] + "\n" + data["solution"],
+        tools=_TOOLS,
+        max_retries=1,
+    )
+    if err:
+        data["error"] = err
         return data
-
-    try:
-        data["parsed"] = safe_json(get_final_output(res))
-    except ValueError as exc:
-        data["error"] = f"ParserAgent failed: {exc}"
+    data["parsed"] = cast(dict[str, Any], out)
     return data
 
 
 def _step_concept(data: dict[str, Any]) -> dict[str, Any]:
-    try:
-        res = AgentsRunner.run_sync(
-            ConceptAgent,
-            input=str(data["parsed"]),
-            tools=_TOOLS,
-        )
-        data["concept"] = get_final_output(res)
-    except Exception as exc:  # pragma: no cover - defensive
-        data["error"] = f"ConceptAgent failed: {exc}"
+    out, err = invoke_agent(
+        ConceptAgent, str(data["parsed"]), tools=_TOOLS, expect_json=False
+    )
+    if err:
+        data["error"] = err
+        return data
+    data["concept"] = cast(str, out)
     return data
 
 
 def _step_template(data: dict[str, Any]) -> dict[str, Any]:
-    attempts = 0
-    while attempts < _TEMPLATE_MAX_RETRIES:
-        try:
-            res = AgentsRunner.run_sync(
-                TemplateAgent,
-                input=json.dumps(
-                    {"parsed": data["parsed"], "concept": data["concept"]}
-                ),
-                tools=_TEMPLATE_TOOLS,
-            )
-        except Exception as exc:  # pragma: no cover - defensive
-            data["error"] = f"TemplateAgent failed: {exc}"
-            return data
-
-        try:
-            data["template"] = safe_json(get_final_output(res))
-            return data
-        except ValueError as exc:
-            attempts += 1
-            if attempts >= _TEMPLATE_MAX_RETRIES:
-                data["error"] = f"TemplateAgent failed: {exc}"
-                return data
+    payload = json.dumps({"parsed": data["parsed"], "concept": data["concept"]})
+    out, err = invoke_agent(
+        TemplateAgent,
+        payload,
+        tools=_TEMPLATE_TOOLS,
+        max_retries=_TEMPLATE_MAX_RETRIES,
+    )
+    if err:
+        data["error"] = err
+        return data
+    data["template"] = cast(dict[str, Any], out)
     return data
 
 
 def _step_sample(data: dict[str, Any]) -> dict[str, Any]:
-    try:
-        params = run_json_agent(
-            SampleAgent, json.dumps({"template": data["template"]}), tools=_TOOLS
-        )
-        if not isinstance(params, dict):
-            data["error"] = "SampleAgent produced non-dict params"
-            return data
-        _, skipped = _sanitize_params(params)
-        if skipped:
-            bad = ", ".join(f"{k}={params[k]!r}" for k in skipped)
-            data["error"] = f"SampleAgent produced non-numeric params: {bad}"
-            return data
-        data["params"] = params
-    except Exception as exc:  # pragma: no cover - defensive
-        data["error"] = f"SampleAgent failed: {exc}"
+    out, err = invoke_agent(
+        SampleAgent, json.dumps({"template": data["template"]}), tools=_TOOLS
+    )
+    if err:
+        data["error"] = err
+        return data
+    if not isinstance(out, dict):
+        data["error"] = "SampleAgent produced non-dict params"
+        return data
+    _, skipped = _sanitize_params(out)
+    if skipped:
+        bad = ", ".join(f"{k}={out[k]!r}" for k in skipped)
+        data["error"] = f"SampleAgent produced non-numeric params: {bad}"
+        return data
+    data["params"] = out
     return data
 
 
 def _step_symbolic(data: dict[str, Any]) -> dict[str, Any]:
-    try:
-        payload = json.dumps({"template": data["template"], "params": data["params"]})
-        res = AgentsRunner.run_sync(
-            SymbolicSolveAgent,
-            input=payload,
-            tools=_TOOLS,
-        )
-        data["symbolic_solution"] = get_final_output(res)
-        res2 = AgentsRunner.run_sync(
-            SymbolicSimplifyAgent,
-            input=data["symbolic_solution"],
-            tools=_TOOLS,
-        )
-        data["symbolic_simplified"] = get_final_output(res2)
-    except Exception as exc:  # pragma: no cover - defensive
-        data["symbolic_error"] = f"Symbolic agents failed: {exc}"
+    payload = json.dumps({"template": data["template"], "params": data["params"]})
+    sol, err = invoke_agent(
+        SymbolicSolveAgent, payload, tools=_TOOLS, expect_json=False
+    )
+    if err:
+        data["symbolic_error"] = err.replace("SymbolicSolveAgent", "Symbolic agents")
+        return data
+    data["symbolic_solution"] = cast(str, sol)
+    simp, err = invoke_agent(
+        SymbolicSimplifyAgent, data["symbolic_solution"], tools=_TOOLS, expect_json=False
+    )
+    if err:
+        data["symbolic_error"] = err.replace("SymbolicSimplifyAgent", "Symbolic agents")
+        return data
+    data["symbolic_simplified"] = cast(str, simp)
     return data
 
 
@@ -325,21 +347,19 @@ def _step_operations(data: dict[str, Any]) -> dict[str, Any]:
         return data
 
     payload = json.dumps({"data": data, "operations": ops})
-    try:
-        out = run_json_agent(OperationsAgent, payload, tools=_TOOLS)
-        if isinstance(out, dict):
-            params_out = out.get("params")
-            if isinstance(params_out, dict):
-                _, skipped = _sanitize_params(params_out)
-                if skipped:
-                    bad = ", ".join(f"{k}={params_out[k]!r}" for k in skipped)
-                    data["error"] = (
-                        f"OperationsAgent produced non-numeric params: {bad}"
-                    )
-                    return data
-            data.update(out)
-    except Exception as exc:  # pragma: no cover - defensive
-        data["error"] = f"OperationsAgent failed: {exc}"
+    out, err = invoke_agent(OperationsAgent, payload, tools=_TOOLS)
+    if err:
+        data["error"] = err
+        return data
+    if isinstance(out, dict):
+        params_out = out.get("params")
+        if isinstance(params_out, dict):
+            _, skipped = _sanitize_params(params_out)
+            if skipped:
+                bad = ", ".join(f"{k}={params_out[k]!r}" for k in skipped)
+                data["error"] = f"OperationsAgent produced non-numeric params: {bad}"
+                return data
+        data.update(out)
     return data
 
 
@@ -382,12 +402,11 @@ def _step_stem_choice(data: dict[str, Any]) -> dict[str, Any]:
     if "table_html" in data:
         payload["table_html"] = data["table_html"]
 
-    try:
-        data["stem_data"] = run_json_agent(
-            StemChoiceAgent, json.dumps(payload), tools=_TOOLS
-        )
-    except Exception as exc:  # pragma: no cover - defensive
-        data["error"] = f"StemChoiceAgent failed: {exc}"
+    out, err = invoke_agent(StemChoiceAgent, json.dumps(payload), tools=_TOOLS)
+    if err:
+        data["error"] = err
+        return data
+    data["stem_data"] = out
     return data
 
 
@@ -405,10 +424,9 @@ def _step_format(data: dict[str, Any]) -> dict[str, Any]:
     if "table_html" in data:
         payload["table_html"] = data["table_html"]
 
-    try:
-        out = run_json_agent(FormatterAgent, json.dumps(payload), tools=_TOOLS)
-    except Exception as exc:  # pragma: no cover - defensive
-        data["error"] = f"FormatterAgent failed: {exc}"
+    out, err = invoke_agent(FormatterAgent, json.dumps(payload), tools=_TOOLS)
+    if err:
+        data["error"] = err
         return data
 
     # Pass‑through assets in case the formatter dropped them
