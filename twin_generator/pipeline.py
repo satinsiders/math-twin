@@ -25,6 +25,7 @@ from .tools import (
     _calc_answer,      # internal helper functions (NOT the FunctionTool wrappers!)
     _make_html_table,
     _render_graph,
+    _sanitize_params,
     calc_answer_tool,
     make_html_table_tool,
     render_graph_tool,
@@ -179,7 +180,16 @@ def _step_sample(data: dict[str, Any]) -> dict[str, Any]:
             input=json.dumps({"template": data["template"]}),
             tools=_TOOLS,
         )
-        data["params"] = safe_json(get_final_output(res))
+        params = safe_json(get_final_output(res))
+        if not isinstance(params, dict):
+            data["error"] = "SampleAgent returned non-dict params"
+            return data
+        _, invalid = _sanitize_params(params)
+        if invalid:
+            items = ", ".join(f"{k}={v!r}" for k, v in invalid.items())
+            data["error"] = f"Non-numeric params: {items}"
+            return data
+        data["params"] = params
     except Exception as exc:  # pragma: no cover - defensive
         data["error"] = f"SampleAgent failed: {exc}"
     return data
@@ -220,6 +230,12 @@ def _step_operations(data: dict[str, Any]) -> dict[str, Any]:
         )
         out = safe_json(get_final_output(res))
         if isinstance(out, dict):
+            if isinstance(out.get("params"), dict):
+                _, invalid = _sanitize_params(out["params"])
+                if invalid:
+                    items = ", ".join(f"{k}={v!r}" for k, v in invalid.items())
+                    data["error"] = f"Non-numeric params: {items}"
+                    return data
             data.update(out)
     except Exception as exc:  # pragma: no cover - defensive
         data["error"] = f"OperationsAgent failed: {exc}"
