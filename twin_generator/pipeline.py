@@ -44,6 +44,7 @@ __all__ = ["generate_twin"]
 # a more restrictive list that excludes ``render_graph_tool`` and ``make_html_table_tool``.
 _TOOLS = [calc_answer_tool, render_graph_tool, make_html_table_tool]
 _TEMPLATE_TOOLS = [calc_answer_tool]
+_TEMPLATE_MAX_RETRIES = 3
 
 
 # ---------------------------------------------------------------------------
@@ -161,15 +162,28 @@ def _step_concept(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def _step_template(data: dict[str, Any]) -> dict[str, Any]:
-    try:
-        res = AgentsRunner.run_sync(
-            TemplateAgent,
-            input=json.dumps({"parsed": data["parsed"], "concept": data["concept"]}),
-            tools=_TEMPLATE_TOOLS,
-        )
-        data["template"] = safe_json(get_final_output(res))
-    except Exception as exc:  # pragma: no cover - defensive
-        data["error"] = f"TemplateAgent failed: {exc}"
+    attempts = 0
+    while attempts < _TEMPLATE_MAX_RETRIES:
+        try:
+            res = AgentsRunner.run_sync(
+                TemplateAgent,
+                input=json.dumps(
+                    {"parsed": data["parsed"], "concept": data["concept"]}
+                ),
+                tools=_TEMPLATE_TOOLS,
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            data["error"] = f"TemplateAgent failed: {exc}"
+            return data
+
+        try:
+            data["template"] = safe_json(get_final_output(res))
+            return data
+        except ValueError as exc:
+            attempts += 1
+            if attempts >= _TEMPLATE_MAX_RETRIES:
+                data["error"] = f"TemplateAgent failed: {exc}"
+                return data
     return data
 
 

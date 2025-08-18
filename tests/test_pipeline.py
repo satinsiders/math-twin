@@ -121,6 +121,46 @@ def test_generate_twin_template_empty(monkeypatch: pytest.MonkeyPatch) -> None:
     assert out.get("error") == "TemplateAgent failed: Agent output was empty"
 
 
+def test_generate_twin_template_retry(monkeypatch: pytest.MonkeyPatch) -> None:
+    call_counts: dict[str, int] = {}
+
+    def mock_run_sync(agent: Any, input: Any, tools: Any | None = None) -> SimpleNamespace:
+        name = agent.name
+        call_counts[name] = call_counts.get(name, 0) + 1
+        if name == "ParserAgent":
+            return SimpleNamespace(final_output="parsed")
+        if name == "ConceptAgent":
+            return SimpleNamespace(final_output="concept")
+        if name == "TemplateAgent":
+            if call_counts[name] == 1:
+                return SimpleNamespace(final_output="not json")
+            return SimpleNamespace(final_output='{"visual": {"type": "none"}, "answer_expression": "0"}')
+        if name == "SampleAgent":
+            return SimpleNamespace(final_output='{}')
+        if name == "SymbolicSolveAgent":
+            return SimpleNamespace(final_output="0")
+        if name == "SymbolicSimplifyAgent":
+            return SimpleNamespace(final_output="0")
+        if name == "StemChoiceAgent":
+            return SimpleNamespace(final_output='{"twin_stem": "Q", "choices": [1], "rationale": "r"}')
+        if name == "FormatterAgent":
+            return SimpleNamespace(
+                final_output=(
+                    '{"twin_stem": "Q", "choices": [1], '
+                    '"answer_index": 0, "answer_value": 1, "rationale": "r"}'
+                )
+            )
+        if name == "QAAgent":
+            return SimpleNamespace(final_output="pass")
+        raise AssertionError("unexpected agent")
+
+    monkeypatch.setattr(pipeline.AgentsRunner, "run_sync", mock_run_sync)
+
+    out = pipeline.generate_twin("p", "s")
+    assert out.get("error") is None
+    assert call_counts.get("TemplateAgent") == 2
+
+
 def test_generate_twin_qa_retry(monkeypatch: pytest.MonkeyPatch) -> None:
     call_counts: dict[str, int] = {}
 
