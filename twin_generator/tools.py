@@ -120,6 +120,31 @@ render_graph_tool = function_tool(_render_graph)
 # ---------------------------------------------------------------------------
 
 
+def _sanitize_params(raw: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
+    """Return params convertible to numeric SymPy expressions and skipped keys.
+
+    Any key whose value cannot be converted to a SymPy expression or results in
+    an expression with free symbols is skipped.  The cleaned dictionary uses the
+    SymPy representations of the values while ``skipped`` contains keys that were
+    discarded.
+    """
+    import sympy as sp
+
+    cleaned: dict[str, Any] = {}
+    skipped: list[str] = []
+    for key, val in raw.items():
+        try:
+            sym_val = sp.sympify(val)
+        except sp.SympifyError:
+            skipped.append(key)
+            continue
+        if not getattr(sym_val, "is_number", False):
+            skipped.append(key)
+            continue
+        cleaned[key] = sym_val
+    return cleaned, skipped
+
+
 def _calc_answer(expression: str, params_json: str) -> Any:  # noqa: ANN401 – generic return
     """Evaluate `expression` under the provided `params`.
 
@@ -135,29 +160,9 @@ def _calc_answer(expression: str, params_json: str) -> Any:  # noqa: ANN401 –�
     import warnings
 
     params = json.loads(params_json)
-
-    def _sanitize_params(raw: dict[str, Any]) -> dict[str, Any]:
-        """Return only params that sympify to numeric constants.
-
-        Any key whose value cannot be converted to a SymPy expression or results
-        in an expression with free symbols is discarded. Skipped keys are
-        surfaced via a warning for easier debugging.
-        """
-        cleaned: dict[str, Any] = {}
-        skipped: list[str] = []
-        for key, val in raw.items():
-            try:
-                sym_val = sp.sympify(val)
-            except sp.SympifyError:
-                skipped.append(key)
-                continue
-            if not getattr(sym_val, "is_number", False):
-                skipped.append(key)
-                continue
-            cleaned[key] = sym_val
-        if skipped:
-            warnings.warn(f"Skipped non-numeric params: {', '.join(skipped)}")
-        return cleaned
+    sanitized, skipped = _sanitize_params(params)
+    if skipped:
+        warnings.warn(f"Skipped non-numeric params: {', '.join(skipped)}")
 
     @contextmanager
     def _time_limit(seconds: int) -> Iterator[None]:
@@ -214,7 +219,7 @@ def _calc_answer(expression: str, params_json: str) -> Any:  # noqa: ANN401 –�
         return _eval_advanced(e, depth + 1)
 
     expr = _eval_advanced(expr)
-    expr = expr.subs(_sanitize_params(params))
+    expr = expr.subs(sanitized)
     expr = _eval_advanced(expr)
 
     try:
