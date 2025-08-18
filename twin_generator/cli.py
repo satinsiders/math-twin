@@ -8,9 +8,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import numpy as np  # type: ignore
-from PIL import Image  # type: ignore
-
 from . import constants as C
 from .pipeline import generate_twin
 
@@ -20,8 +17,17 @@ __all__ = ["main"]
 def _preview_graph(path: str) -> None:
     """Display the generated graph PNG in a Matplotlib window (best‑effort)."""
     try:
+        import numpy as np  # type: ignore
+        from PIL import Image  # type: ignore
         import matplotlib.pyplot as plt  # imported lazily to avoid GUI deps
+    except ImportError as exc:
+        print(
+            f"⚠️ Could not preview graph image; missing dependency: {exc}",
+            file=sys.stderr,
+        )
+        return
 
+    try:
         img = Image.open(path).convert("RGBA")
         img.show()
         arr = np.array(img)
