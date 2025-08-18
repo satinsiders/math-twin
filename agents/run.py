@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from types import SimpleNamespace
-from typing import Any, cast, Sequence
+from typing import Any, cast, Sequence, ClassVar
 
 
 class Runner:
@@ -23,6 +23,8 @@ class Runner:
     and Responses API exclusively.  The method always returns an object with a
     ``final_output`` attribute containing the model's response.
     """
+
+    _SANITIZED_CACHE: ClassVar[dict[str, dict[str, Any]]] = {}
 
     @staticmethod
     def run_sync(
@@ -74,18 +76,43 @@ class Runner:
             "input": cast(Any, messages),
         }
 
-        tool_map: dict[str, Any] = {}
-        if tools:
-            sanitized: list[dict[str, Any]] = []
-            for t in tools:
-                name = t.get("name")
-                if name:
-                    tool_map[name] = t
-                sanitized.append({k: v for k, v in t.items() if not k.startswith("_")})
-            kwargs["tools"] = sanitized
+        sanitized_tools, tool_map = Runner._sanitize_tools(tools)
+        if sanitized_tools:
+            kwargs["tools"] = sanitized_tools
 
         resp: Any = client.responses.create(**kwargs)
 
+        resp = Runner._execute_tool_calls(client, resp, tool_map)
+
+        final_output = getattr(resp, "output_text", str(resp))
+
+        return SimpleNamespace(final_output=final_output)
+
+    @classmethod
+    def _sanitize_tools(
+        cls, tools: Sequence[Any] | None
+    ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        tool_map: dict[str, Any] = {}
+        sanitized: list[dict[str, Any]] = []
+        if not tools:
+            return sanitized, tool_map
+        for t in tools:
+            name = t.get("name")
+            if name:
+                tool_map[name] = t
+                cached = cls._SANITIZED_CACHE.get(name)
+                if cached is None:
+                    cached = {k: v for k, v in t.items() if not k.startswith("_")}
+                    cls._SANITIZED_CACHE[name] = cached
+                sanitized.append(cached)
+            else:
+                sanitized.append({k: v for k, v in t.items() if not k.startswith("_")})
+        return sanitized, tool_map
+
+    @staticmethod
+    def _execute_tool_calls(
+        client: Any, resp: Any, tool_map: dict[str, Any]
+    ) -> Any:
         while getattr(resp, "status", None) == "requires_action":
             action = getattr(resp, "required_action")
             submit = getattr(action, "submit_tool_outputs")
@@ -105,7 +132,4 @@ class Runner:
             resp = client.responses.submit_tool_outputs(
                 response_id=resp.id, tool_outputs=outputs
             )
-
-        final_output = getattr(resp, "output_text", str(resp))
-
-        return SimpleNamespace(final_output=final_output)
+        return resp
