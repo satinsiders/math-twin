@@ -429,6 +429,8 @@ def _step_format(data: dict[str, Any]) -> dict[str, Any]:
         data["error"] = err
         return data
 
+    out = cast(dict[str, Any], out)
+
     # Pass‑through assets in case the formatter dropped them
     if "graph_path" in data:
         out["graph_path"] = data["graph_path"]
