@@ -2,3 +2,4 @@ flake8
 mypy
 pre-commit
 sympy
+json5

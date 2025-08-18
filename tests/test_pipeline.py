@@ -125,7 +125,10 @@ def test_generate_twin_parser_invalid_json(
     out = pipeline.generate_twin("p", "s")
     assert (
         out.get("error")
-        == "ParserAgent failed: Agent output was not valid JSON: not json..."
+        == (
+            "ParserAgent failed: Agent output was not valid JSON even after repair. "
+            "Original snippet: not json... Repaired snippet: not json..."
+        )
     )
     assert call_order == ["ParserAgent"]
 
@@ -280,7 +283,10 @@ def test_sample_agent_json_retry(monkeypatch: pytest.MonkeyPatch, always_fail: b
             return SimpleNamespace(final_output='{"twin_stem": "Q", "choices": [1], "rationale": "r"}')
         if name == "FormatterAgent":
             return SimpleNamespace(
-                final_output='{"twin_stem": "Q", "choices": [1], "answer_index": 0, "answer_value": 1, "rationale": "r"}'
+                final_output=(
+                    '{"twin_stem": "Q", "choices": [1], '
+                    '"answer_index": 0, "answer_value": 1, "rationale": "r"}'
+                )
             )
         if name == "QAAgent":
             return SimpleNamespace(final_output="pass")
@@ -310,7 +316,10 @@ def test_operations_agent_json_retry(monkeypatch: pytest.MonkeyPatch, always_fai
             return SimpleNamespace(final_output="concept")
         if name == "TemplateAgent":
             return SimpleNamespace(
-                final_output='{"visual": {"type": "none"}, "answer_expression": "x", "operations": [{"expr": "1", "output": "run_agent"}]}'
+                final_output=(
+                    '{"visual": {"type": "none"}, "answer_expression": "x", '
+                    '"operations": [{"expr": "1", "output": "run_agent"}]}'
+                )
             )
         if name == "SampleAgent":
             return SimpleNamespace(final_output='{"x": 1}')
@@ -326,7 +335,10 @@ def test_operations_agent_json_retry(monkeypatch: pytest.MonkeyPatch, always_fai
             return SimpleNamespace(final_output='{"twin_stem": "Q", "choices": [1], "rationale": "r"}')
         if name == "FormatterAgent":
             return SimpleNamespace(
-                final_output='{"twin_stem": "Q", "choices": [1], "answer_index": 0, "answer_value": 1, "rationale": "r"}'
+                final_output=(
+                    '{"twin_stem": "Q", "choices": [1], '
+                    '"answer_index": 0, "answer_value": 1, "rationale": "r"}'
+                )
             )
         if name == "QAAgent":
             return SimpleNamespace(final_output="pass")
@@ -368,7 +380,10 @@ def test_stem_choice_agent_json_retry(monkeypatch: pytest.MonkeyPatch, always_fa
             return SimpleNamespace(final_output='{"twin_stem": "Q", "choices": [1], "rationale": "r"}')
         if name == "FormatterAgent":
             return SimpleNamespace(
-                final_output='{"twin_stem": "Q", "choices": [1], "answer_index": 0, "answer_value": 1, "rationale": "r"}'
+                final_output=(
+                    '{"twin_stem": "Q", "choices": [1], '
+                    '"answer_index": 0, "answer_value": 1, "rationale": "r"}'
+                )
             )
         if name == "QAAgent":
             return SimpleNamespace(final_output="pass")
@@ -410,7 +425,10 @@ def test_formatter_agent_json_retry(monkeypatch: pytest.MonkeyPatch, always_fail
             if always_fail or call_counts[name] == 1:
                 return SimpleNamespace(final_output="not json")
             return SimpleNamespace(
-                final_output='{"twin_stem": "Q", "choices": [1], "answer_index": 0, "answer_value": 1, "rationale": "r"}'
+                final_output=(
+                    '{"twin_stem": "Q", "choices": [1], '
+                    '"answer_index": 0, "answer_value": 1, "rationale": "r"}'
+                )
             )
         if name == "QAAgent":
             return SimpleNamespace(final_output="pass")
