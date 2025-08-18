@@ -112,7 +112,7 @@ class _Runner:
         self.verbose = verbose
         self.qa_max_retries = qa_max_retries
 
-    def run(self, inputs: dict[str, Any]) -> dict[str, Any]:  # noqa: ANN401 – generic return
+    def run(self, inputs: dict[str, Any]) -> dict[str, Any]:
         data = dict(inputs)
         steps = list(self.graph.steps)
         idx = 0
