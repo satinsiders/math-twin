@@ -164,3 +164,26 @@ def test_step_visual_handles_non_dict() -> None:
     out = pipeline._step_visual(dict(data))
     assert out == data
 
+
+def test_step_sample_rejects_invalid_params(monkeypatch: pytest.MonkeyPatch) -> None:
+    def mock_run_sync(agent: Any, input: Any, tools: Any | None = None) -> SimpleNamespace:
+        assert agent.name == "SampleAgent"
+        return SimpleNamespace(final_output='{"x": "oops"}')
+
+    monkeypatch.setattr(pipeline.AgentsRunner, "run_sync", mock_run_sync)
+
+    out = pipeline._step_sample({"template": {}})
+    assert out.get("error") == "SampleAgent produced non-numeric params: x='oops'"
+
+
+def test_step_operations_rejects_invalid_params(monkeypatch: pytest.MonkeyPatch) -> None:
+    def mock_run_sync(agent: Any, input: Any, tools: Any | None = None) -> SimpleNamespace:
+        assert agent.name == "OperationsAgent"
+        return SimpleNamespace(final_output='{"params": {"x": "oops"}}')
+
+    monkeypatch.setattr(pipeline.AgentsRunner, "run_sync", mock_run_sync)
+
+    data = {"template": {"operations": [1]}, "params": {}}
+    out = pipeline._step_operations(data)
+    assert out.get("error") == "OperationsAgent produced non-numeric params: x='oops'"
+
