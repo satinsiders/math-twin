@@ -1,14 +1,13 @@
 import inspect
+import sys
 import typing
 from pathlib import Path
 from typing import Optional, Union
 from unittest.mock import patch
 
-import sys
-
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from agents.tool import _INTROSPECTION_CACHE, function_tool
+from agents.tool import _INTROSPECTION_CACHE, function_tool  # noqa: E402
 
 
 def test_annotation_to_type_handles_complex_signatures():
