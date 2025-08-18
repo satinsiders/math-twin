@@ -4,7 +4,8 @@ from agents import Agent  # type: ignore
 ParserAgent = Agent(
     name="ParserAgent",
     instructions=(
-        "Take the source problem + solution and return JSON detailing variables, "
+        "Take the source problem + solution and return only a single JSON object "
+        "with double-quoted keys/values and no trailing text detailing variables, "
         "relations, constraints, any visuals, and the answer format, ensuring coverage through "
         "extremely advanced math operations."
     ),
@@ -51,8 +52,9 @@ SampleAgent = Agent(
     name="SampleAgent",
     instructions=(
         "Given a parameterized math problem template, generate a candidate "
-        "parameter set and compute output. Return only the parameter mapping "
-        "as valid JSON without any prose, ensuring coverage through extremely advanced math operations."
+        "parameter set and compute output. Return only a single JSON object "
+        "with double-quoted keys/values and no trailing text representing the "
+        "parameter mapping, ensuring coverage through extremely advanced math operations."
     ),
     model="gpt-5-mini",
 )
@@ -61,7 +63,8 @@ StemChoiceAgent = Agent(
     name="StemChoiceAgent",
     instructions=(
         "Using the *parameter template* and the sampled params, draft a **new SAT-style** equation problem "
-        "that tests the same concept but with surface variation. Return only JSON with keys: "
+        "that tests the same concept but with surface variation. Return only a single JSON object "
+        "with double-quoted keys/values and no trailing text containing keys: "
         "twin_stem, choices[], rationale, ensuring coverage through extremely advanced math operations."
     ),
     model="gpt-5-mini",
@@ -70,7 +73,8 @@ StemChoiceAgent = Agent(
 FormatterAgent = Agent(
     name="FormatterAgent",
     instructions=(
-        "Return minified JSON with fields: twin_stem, choices[], answer_index, "
+        "Return only a single minified JSON object with double-quoted keys/values "
+        "and no trailing text containing fields: twin_stem, choices[], answer_index, "
         "answer_value, rationale, graph_path?, table_html?. Validate internal consistency while "
         "ensuring coverage through extremely advanced math operations."
     ),
@@ -80,7 +84,8 @@ FormatterAgent = Agent(
 QAAgent = Agent(
     name="QAAgent",
     instructions=(
-        "Validate the previous step's output for correctness and internal consistency, ensuring coverage through "
+        "Validate the previous step's output for correctness, strict JSON formatting "
+        "(double-quoted keys/values with no trailing text), and internal consistency, ensuring coverage through "
         "extremely advanced math operations. Return 'pass' if the output is sound, otherwise return a brief reason."
     ),
     model="gpt-5-mini",
@@ -108,7 +113,8 @@ OperationsAgent = Agent(
     name="OperationsAgent",
     instructions=(
         "Given the current pipeline data and a list of operations, invoke any provided tools "
-        "to compute intermediate results. Return only JSON with any newly derived fields."
+        "to compute intermediate results. Return only a single JSON object with double-quoted "
+        "keys/values and no trailing text containing any newly derived fields."
     ),
     model="gpt-5-mini",
 )
