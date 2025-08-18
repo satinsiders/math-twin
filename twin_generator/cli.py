@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import sys
 from pathlib import Path
@@ -53,6 +54,8 @@ def _parse_cli(argv: list[str] | None = None) -> argparse.Namespace:  # noqa: D4
 
 def main(argv: list[str] | None = None) -> None:  # noqa: D401 – imperative mood
     ns = _parse_cli(argv)
+
+    logging.basicConfig(level=logging.DEBUG if ns.verbose else logging.WARNING)
 
     if ns.demo or ns.graph_demo:
         problem_text: str = C._GRAPH_PROBLEM if ns.graph_demo else C._DEMO_PROBLEM
