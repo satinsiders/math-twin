@@ -1,2 +1,0 @@
-[console_scripts]
-twin-generator = twin_generator.cli:main
