@@ -5,6 +5,7 @@ import html as _html
 import json
 import os
 import tempfile
+import warnings
 from pathlib import Path
 from typing import Any
 
@@ -42,17 +43,33 @@ make_html_table_tool = function_tool(_make_html_table)
 # Graph renderer helper
 # ---------------------------------------------------------------------------
 
+
+def _select_matplotlib_backend() -> None:
+    """Choose a usable Matplotlib backend once at import time."""
+    import matplotlib  # type: ignore
+
+    backend = matplotlib.get_backend().lower()
+    if backend in {"agg", "tkagg"}:  # already configured
+        return
+
+    prefer_tk = bool(os.environ.get("DISPLAY")) or os.environ.get("MPLBACKEND") == "TkAgg"
+    if prefer_tk:
+        try:
+            matplotlib.use("TkAgg")
+            return
+        except Exception as exc:  # pragma: no cover - depends on system backend
+            warnings.warn(
+                f"Preferred GUI backend 'TkAgg' unavailable; falling back to 'Agg': {exc}",
+                RuntimeWarning,
+            )
+    matplotlib.use("Agg")
+
+
+_select_matplotlib_backend()
+
+
 def _render_graph(spec_json: str) -> str:
     """Render a graph to a **PNG file** and return the file path (string)."""
-    import matplotlib  # type: ignore
-    _prefer_tk = os.environ.get("DISPLAY") or os.environ.get("MPLBACKEND") == "TkAgg"
-    try:
-        if _prefer_tk:
-            matplotlib.use("TkAgg")
-        else:
-            matplotlib.use("Agg")
-    except Exception:
-        matplotlib.use("Agg")
     import matplotlib.pyplot as plt  # type: ignore
     spec = json.loads(spec_json)
     points: list[list[float]] = spec.get("points", [])
