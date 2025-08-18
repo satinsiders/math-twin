@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from typing import Any, Callable, cast
 
@@ -65,7 +66,7 @@ _JSON_STEPS = {
 
 
 def run_json_agent(
-    agent: type,
+    agent: Any,
     payload: str,
     *,
     tools: list[Any] | None = None,
@@ -111,6 +112,61 @@ class _Runner:
         self.graph = graph
         self.verbose = verbose
         self.qa_max_retries = qa_max_retries
+        self.logger = logging.getLogger(__name__)
+        self.logger.setLevel(logging.DEBUG if verbose else logging.WARNING)
+
+    def _execute_step(
+        self, step: Callable[[dict[str, Any]], dict[str, Any]], data: dict[str, Any]
+    ) -> tuple[
+        dict[str, Any],
+        bool,
+        list[Callable[[dict[str, Any]], dict[str, Any]]] | None,
+        dict[str, Any],
+    ]:
+        before = dict(data)
+        result = step(data)
+        skip_qa = bool(result.pop("skip_qa", False))
+        next_steps = result.pop("next_steps", None)
+        return result, skip_qa, next_steps, before
+
+    def _qa_check(
+        self,
+        name: str,
+        data: dict[str, Any],
+        idx: int,
+        attempts: int,
+        total_steps: int,
+        json_required: bool,
+    ) -> tuple[bool, str]:
+        try:
+            qa_in = json.dumps({"step": name, "data": data})
+        except (TypeError, ValueError) as exc:
+            if not json_required:
+                raise RuntimeError(f"QAAgent failed: {exc}")
+            qa_out = f"non-serializable data: {exc}"
+            self.logger.debug(
+                "[twin-generator] step %d/%d: %s QA round %d: %s",
+                idx + 1,
+                total_steps,
+                name,
+                attempts + 1,
+                qa_out,
+            )
+            return False, qa_out
+        try:
+            qa_res = AgentsRunner.run_sync(QAAgent, input=qa_in, tools=_TOOLS)
+            qa_out = get_final_output(qa_res).strip().lower()
+        except Exception as exc:  # pragma: no cover - defensive
+            raise RuntimeError(f"QAAgent failed: {exc}")
+        self.logger.debug(
+            "[twin-generator] step %d/%d: %s QA round %d: %s",
+            idx + 1,
+            total_steps,
+            name,
+            attempts + 1,
+            qa_out,
+        )
+        return qa_out == "pass", qa_out
 
     def run(self, inputs: dict[str, Any]) -> dict[str, Any]:  # noqa: ANN401 – generic return
         data = dict(inputs)
@@ -121,55 +177,28 @@ class _Runner:
             name = step.__name__.replace("_step_", "").lstrip("_")
             attempts = 0
             while True:
-                before = dict(data)
-                if self.verbose:
-                    print(
-                        f"[twin-generator] step {idx + 1}/{len(steps)}: {name} "
-                        f"attempt {attempts + 1}"
-                    )
-                data = step(data)
-                skip_qa = bool(data.pop("skip_qa", False))
+                self.logger.debug(
+                    "[twin-generator] step %d/%d: %s attempt %d",
+                    idx + 1,
+                    len(steps),
+                    name,
+                    attempts + 1,
+                )
+                data, skip_qa, next_steps, before = self._execute_step(step, data)
                 if "error" in data:
-                    break
-                next_steps = data.pop("next_steps", None)
+                    return {"output": data}
                 if skip_qa:
                     if next_steps:
                         steps[idx + 1 : idx + 1] = next_steps
                     break
                 json_required = name in _JSON_STEPS
                 try:
-                    qa_in = json.dumps({"step": name, "data": data})
-                except (TypeError, ValueError) as exc:
-                    if not json_required:
-                        data["error"] = f"QAAgent failed: {exc}"
-                        break
-                    qa_out = f"non-serializable data: {exc}"
-                    if self.verbose:
-                        print(
-                            f"[twin-generator] step {idx + 1}/{len(steps)}: {name} "
-                            f"QA round {attempts + 1}: {qa_out}"
-                        )
-                    attempts += 1
-                    if (
-                        self.qa_max_retries is not None
-                        and attempts >= self.qa_max_retries
-                    ):
-                        data["error"] = f"QA failed for {name}: {qa_out}"
-                        break
-                    data = before
-                    continue
-                try:
-                    qa_res = AgentsRunner.run_sync(QAAgent, input=qa_in, tools=_TOOLS)
-                    qa_out = get_final_output(qa_res).strip().lower()
-                except Exception as exc:  # pragma: no cover - defensive
-                    data["error"] = f"QAAgent failed: {exc}"
-                    break
-                if self.verbose:
-                    print(
-                        f"[twin-generator] step {idx + 1}/{len(steps)}: {name} "
-                        f"QA round {attempts + 1}: {qa_out}"
+                    passed, qa_out = self._qa_check(
+                        name, data, idx, attempts, len(steps), json_required
                     )
-                if qa_out == "pass":
+                except RuntimeError as exc:
+                    return {"output": {"error": str(exc)}}
+                if passed:
                     if next_steps:
                         steps[idx + 1 : idx + 1] = next_steps
                     break
@@ -178,11 +207,12 @@ class _Runner:
                     self.qa_max_retries is not None
                     and attempts >= self.qa_max_retries
                 ):
-                    data["error"] = f"QA failed for {name}: {qa_out}"
-                    break
+                    return {
+                        "output": {
+                            "error": f"QA failed for {name}: {qa_out}",
+                        }
+                    }
                 data = before
-            if "error" in data:
-                break
             idx += 1
         return {"output": data}
 
