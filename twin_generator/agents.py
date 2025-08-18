@@ -20,11 +20,29 @@ ConceptAgent = Agent(
     model="gpt-5-mini",
 )
 
+# TemplateAgent expected schema:
+# {
+#   "template": "problem statement with symbolic parameters",
+#   "domains": {"symbol": "domain description", ...},
+#   "answer_expression": "expression using the symbols",
+#   "operations": [{"expr": "...", "output": "..."}],
+#   "visual": {"type": "none|graph|table", "data": {...}}
+# }
+# Example:
+# {
+#   "template": "Solve for x: a*x + b = c",
+#   "domains": {"a": "nonzero real", "b": "real", "c": "real"},
+#   "answer_expression": "(c - b) / a",
+#   "operations": [{"expr": "a*x + b", "output": "lhs"}],
+#   "visual": {"type": "none", "data": {}}
+# }
 TemplateAgent = Agent(
     name="TemplateAgent",
     instructions=(
         "Replace literals with symbols; provide domains; include a `visual` field "
-        "→ {type: none|graph|table, data: {…}}, ensuring coverage through extremely advanced math operations."
+        "→ {type: none|graph|table, data: {…}}. Return only a single JSON object with "
+        "double-quoted keys/values and no trailing text, ensuring coverage through "
+        "extremely advanced math operations."
     ),
     model="gpt-5-mini",
 )
