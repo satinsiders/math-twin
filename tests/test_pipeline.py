@@ -254,3 +254,176 @@ def test_step_operations_rejects_invalid_params(monkeypatch: pytest.MonkeyPatch)
     out = pipeline._step_operations(data)
     assert out.get("error") == "OperationsAgent produced non-numeric params: x='oops'"
 
+
+@pytest.mark.parametrize("always_fail", [False, True])
+def test_sample_agent_json_retry(monkeypatch: pytest.MonkeyPatch, always_fail: bool) -> None:
+    call_counts: dict[str, int] = {}
+
+    def mock_run_sync(agent: Any, input: Any, tools: Any | None = None) -> SimpleNamespace:
+        name = agent.name
+        call_counts[name] = call_counts.get(name, 0) + 1
+        if name == "ParserAgent":
+            return SimpleNamespace(final_output="parsed")
+        if name == "ConceptAgent":
+            return SimpleNamespace(final_output="concept")
+        if name == "TemplateAgent":
+            return SimpleNamespace(final_output='{"visual": {"type": "none"}, "answer_expression": "x"}')
+        if name == "SampleAgent":
+            if always_fail or call_counts[name] == 1:
+                return SimpleNamespace(final_output="not json")
+            return SimpleNamespace(final_output='{"x": 1}')
+        if name == "SymbolicSolveAgent":
+            return SimpleNamespace(final_output="sym")
+        if name == "SymbolicSimplifyAgent":
+            return SimpleNamespace(final_output="simp")
+        if name == "StemChoiceAgent":
+            return SimpleNamespace(final_output='{"twin_stem": "Q", "choices": [1], "rationale": "r"}')
+        if name == "FormatterAgent":
+            return SimpleNamespace(
+                final_output='{"twin_stem": "Q", "choices": [1], "answer_index": 0, "answer_value": 1, "rationale": "r"}'
+            )
+        if name == "QAAgent":
+            return SimpleNamespace(final_output="pass")
+        raise AssertionError("unexpected agent")
+
+    monkeypatch.setattr(pipeline.AgentsRunner, "run_sync", mock_run_sync)
+
+    out = pipeline.generate_twin("p", "s")
+    if always_fail:
+        assert out.get("error", "").startswith("SampleAgent failed")
+        assert call_counts.get("SampleAgent") == pipeline._JSON_MAX_RETRIES
+    else:
+        assert out.get("error") is None
+        assert call_counts.get("SampleAgent") == 2
+
+
+@pytest.mark.parametrize("always_fail", [False, True])
+def test_operations_agent_json_retry(monkeypatch: pytest.MonkeyPatch, always_fail: bool) -> None:
+    call_counts: dict[str, int] = {}
+
+    def mock_run_sync(agent: Any, input: Any, tools: Any | None = None) -> SimpleNamespace:
+        name = agent.name
+        call_counts[name] = call_counts.get(name, 0) + 1
+        if name == "ParserAgent":
+            return SimpleNamespace(final_output="parsed")
+        if name == "ConceptAgent":
+            return SimpleNamespace(final_output="concept")
+        if name == "TemplateAgent":
+            return SimpleNamespace(
+                final_output='{"visual": {"type": "none"}, "answer_expression": "x", "operations": [{"expr": "1", "output": "run_agent"}]}'
+            )
+        if name == "SampleAgent":
+            return SimpleNamespace(final_output='{"x": 1}')
+        if name == "SymbolicSolveAgent":
+            return SimpleNamespace(final_output="sym")
+        if name == "SymbolicSimplifyAgent":
+            return SimpleNamespace(final_output="simp")
+        if name == "OperationsAgent":
+            if always_fail or call_counts[name] == 1:
+                return SimpleNamespace(final_output="not json")
+            return SimpleNamespace(final_output='{"run_agent": 1}')
+        if name == "StemChoiceAgent":
+            return SimpleNamespace(final_output='{"twin_stem": "Q", "choices": [1], "rationale": "r"}')
+        if name == "FormatterAgent":
+            return SimpleNamespace(
+                final_output='{"twin_stem": "Q", "choices": [1], "answer_index": 0, "answer_value": 1, "rationale": "r"}'
+            )
+        if name == "QAAgent":
+            return SimpleNamespace(final_output="pass")
+        raise AssertionError("unexpected agent")
+
+    monkeypatch.setattr(pipeline.AgentsRunner, "run_sync", mock_run_sync)
+
+    out = pipeline.generate_twin("p", "s")
+    if always_fail:
+        assert out.get("error", "").startswith("OperationsAgent failed")
+        assert call_counts.get("OperationsAgent") == pipeline._JSON_MAX_RETRIES
+    else:
+        assert out.get("error") is None
+        assert call_counts.get("OperationsAgent") == 2
+
+
+@pytest.mark.parametrize("always_fail", [False, True])
+def test_stem_choice_agent_json_retry(monkeypatch: pytest.MonkeyPatch, always_fail: bool) -> None:
+    call_counts: dict[str, int] = {}
+
+    def mock_run_sync(agent: Any, input: Any, tools: Any | None = None) -> SimpleNamespace:
+        name = agent.name
+        call_counts[name] = call_counts.get(name, 0) + 1
+        if name == "ParserAgent":
+            return SimpleNamespace(final_output="parsed")
+        if name == "ConceptAgent":
+            return SimpleNamespace(final_output="concept")
+        if name == "TemplateAgent":
+            return SimpleNamespace(final_output='{"visual": {"type": "none"}, "answer_expression": "x"}')
+        if name == "SampleAgent":
+            return SimpleNamespace(final_output='{"x": 1}')
+        if name == "SymbolicSolveAgent":
+            return SimpleNamespace(final_output="sym")
+        if name == "SymbolicSimplifyAgent":
+            return SimpleNamespace(final_output="simp")
+        if name == "StemChoiceAgent":
+            if always_fail or call_counts[name] == 1:
+                return SimpleNamespace(final_output="not json")
+            return SimpleNamespace(final_output='{"twin_stem": "Q", "choices": [1], "rationale": "r"}')
+        if name == "FormatterAgent":
+            return SimpleNamespace(
+                final_output='{"twin_stem": "Q", "choices": [1], "answer_index": 0, "answer_value": 1, "rationale": "r"}'
+            )
+        if name == "QAAgent":
+            return SimpleNamespace(final_output="pass")
+        raise AssertionError("unexpected agent")
+
+    monkeypatch.setattr(pipeline.AgentsRunner, "run_sync", mock_run_sync)
+
+    out = pipeline.generate_twin("p", "s")
+    if always_fail:
+        assert out.get("error", "").startswith("StemChoiceAgent failed")
+        assert call_counts.get("StemChoiceAgent") == pipeline._JSON_MAX_RETRIES
+    else:
+        assert out.get("error") is None
+        assert call_counts.get("StemChoiceAgent") == 2
+
+
+@pytest.mark.parametrize("always_fail", [False, True])
+def test_formatter_agent_json_retry(monkeypatch: pytest.MonkeyPatch, always_fail: bool) -> None:
+    call_counts: dict[str, int] = {}
+
+    def mock_run_sync(agent: Any, input: Any, tools: Any | None = None) -> SimpleNamespace:
+        name = agent.name
+        call_counts[name] = call_counts.get(name, 0) + 1
+        if name == "ParserAgent":
+            return SimpleNamespace(final_output="parsed")
+        if name == "ConceptAgent":
+            return SimpleNamespace(final_output="concept")
+        if name == "TemplateAgent":
+            return SimpleNamespace(final_output='{"visual": {"type": "none"}, "answer_expression": "x"}')
+        if name == "SampleAgent":
+            return SimpleNamespace(final_output='{"x": 1}')
+        if name == "SymbolicSolveAgent":
+            return SimpleNamespace(final_output="sym")
+        if name == "SymbolicSimplifyAgent":
+            return SimpleNamespace(final_output="simp")
+        if name == "StemChoiceAgent":
+            return SimpleNamespace(final_output='{"twin_stem": "Q", "choices": [1], "rationale": "r"}')
+        if name == "FormatterAgent":
+            if always_fail or call_counts[name] == 1:
+                return SimpleNamespace(final_output="not json")
+            return SimpleNamespace(
+                final_output='{"twin_stem": "Q", "choices": [1], "answer_index": 0, "answer_value": 1, "rationale": "r"}'
+            )
+        if name == "QAAgent":
+            return SimpleNamespace(final_output="pass")
+        raise AssertionError("unexpected agent")
+
+    monkeypatch.setattr(pipeline.AgentsRunner, "run_sync", mock_run_sync)
+
+    out = pipeline.generate_twin("p", "s")
+    if always_fail:
+        assert out.get("error", "").startswith("FormatterAgent failed")
+        assert call_counts.get("FormatterAgent") == pipeline._JSON_MAX_RETRIES
+    else:
+        assert out.get("error") is None
+        assert out["twin_stem"] == "Q"
+        assert call_counts.get("FormatterAgent") == 2
+
