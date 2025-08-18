@@ -263,7 +263,7 @@ def test_sample_agent_json_retry(monkeypatch: pytest.MonkeyPatch, always_fail: b
         name = agent.name
         call_counts[name] = call_counts.get(name, 0) + 1
         if name == "ParserAgent":
-            return SimpleNamespace(final_output="parsed")
+            return SimpleNamespace(final_output="{}")
         if name == "ConceptAgent":
             return SimpleNamespace(final_output="concept")
         if name == "TemplateAgent":
@@ -305,7 +305,7 @@ def test_operations_agent_json_retry(monkeypatch: pytest.MonkeyPatch, always_fai
         name = agent.name
         call_counts[name] = call_counts.get(name, 0) + 1
         if name == "ParserAgent":
-            return SimpleNamespace(final_output="parsed")
+            return SimpleNamespace(final_output="{}")
         if name == "ConceptAgent":
             return SimpleNamespace(final_output="concept")
         if name == "TemplateAgent":
@@ -351,7 +351,7 @@ def test_stem_choice_agent_json_retry(monkeypatch: pytest.MonkeyPatch, always_fa
         name = agent.name
         call_counts[name] = call_counts.get(name, 0) + 1
         if name == "ParserAgent":
-            return SimpleNamespace(final_output="parsed")
+            return SimpleNamespace(final_output="{}")
         if name == "ConceptAgent":
             return SimpleNamespace(final_output="concept")
         if name == "TemplateAgent":
@@ -393,7 +393,7 @@ def test_formatter_agent_json_retry(monkeypatch: pytest.MonkeyPatch, always_fail
         name = agent.name
         call_counts[name] = call_counts.get(name, 0) + 1
         if name == "ParserAgent":
-            return SimpleNamespace(final_output="parsed")
+            return SimpleNamespace(final_output="{}")
         if name == "ConceptAgent":
             return SimpleNamespace(final_output="concept")
         if name == "TemplateAgent":

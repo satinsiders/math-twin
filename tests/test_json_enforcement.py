@@ -25,7 +25,7 @@ def test_generate_twin_invalid_json(monkeypatch: pytest.MonkeyPatch, bad_agent: 
         if name == "QAAgent":
             return SimpleNamespace(final_output="pass")
         if name == "ParserAgent":
-            return SimpleNamespace(final_output="parsed")
+            return SimpleNamespace(final_output="{}")
         if name == "ConceptAgent":
             return SimpleNamespace(final_output="concept")
         if name == "TemplateAgent":

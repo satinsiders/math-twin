@@ -47,6 +47,22 @@ _TEMPLATE_TOOLS = [calc_answer_tool]
 _TEMPLATE_MAX_RETRIES = 3
 _JSON_MAX_RETRIES = 3
 
+# Steps whose outputs are expected to be JSON‑serializable before running QA.
+# The registry can be extended in tests or by downstream code if new steps are
+# introduced that require JSON validation.
+_JSON_STEPS = {
+    "parse",
+    "concept",
+    "template",
+    "sample",
+    "symbolic",
+    "operations",
+    "visual",
+    "answer",
+    "stem_choice",
+    "format",
+}
+
 
 def run_json_agent(
     agent: type,
@@ -120,8 +136,29 @@ class _Runner:
                     if next_steps:
                         steps[idx + 1 : idx + 1] = next_steps
                     break
+                json_required = name in _JSON_STEPS
                 try:
                     qa_in = json.dumps({"step": name, "data": data})
+                except (TypeError, ValueError) as exc:
+                    if not json_required:
+                        data["error"] = f"QAAgent failed: {exc}"
+                        break
+                    qa_out = f"non-serializable data: {exc}"
+                    if self.verbose:
+                        print(
+                            f"[twin-generator] step {idx + 1}/{len(steps)}: {name} "
+                            f"QA round {attempts + 1}: {qa_out}"
+                        )
+                    attempts += 1
+                    if (
+                        self.qa_max_retries is not None
+                        and attempts >= self.qa_max_retries
+                    ):
+                        data["error"] = f"QA failed for {name}: {qa_out}"
+                        break
+                    data = before
+                    continue
+                try:
                     qa_res = AgentsRunner.run_sync(QAAgent, input=qa_in, tools=_TOOLS)
                     qa_out = get_final_output(qa_res).strip().lower()
                 except Exception as exc:  # pragma: no cover - defensive
