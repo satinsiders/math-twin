@@ -30,6 +30,18 @@ python -m twin_generator.cli --demo
 
 Passing `--graph-demo` runs a demo that produces a graph visual. Append `--preview` to automatically preview the generated graph if any. Use `--verbose` to see each pipeline step.
 
+## Tool annotation support
+
+The `agents.tool.function_tool` helper derives a JSON schema for the parameters of a wrapped function using its type hints. Supported annotation patterns include:
+
+- `int` and `float` → `"number"`
+- `bool` → `"boolean"`
+- `str` → `"string"`
+- container types such as `list[T]`, `tuple[T, ...]`, and `set[T]` → `"array"`
+- mappings like `dict[K, V]` → `"object"`
+- `Optional[T]` is treated the same as `T`
+- `Union` is supported when all members resolve to the same JSON schema type; heterogeneous unions fall back to `"string"`
+
 ## Development
 
 Run tests with `pytest` and type checking with `mypy`:

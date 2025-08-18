@@ -3,20 +3,49 @@
 from __future__ import annotations
 
 import inspect
-from typing import Any, Callable, TypeVar, get_type_hints
+from typing import Any, Callable, TypeVar, get_args, get_origin, get_type_hints, Union
 
 
 F = TypeVar("F", bound=Callable[..., Any])
 
 
+_INTROSPECTION_CACHE: dict[Callable[..., Any], tuple[inspect.Signature, dict[str, Any]]] = {}
+
+
 def _annotation_to_type(ann: Any) -> str:
-    """Map a Python type annotation to a JSON schema primitive."""
+    """Map a Python type annotation to a JSON schema primitive.
+
+    Supported annotations include primitives (``int``, ``float``, ``bool``,
+    ``str``), container types such as ``list[T]`` and ``dict[K, V]``, and
+    ``Optional``/``Union`` where all members resolve to the same JSON schema
+    type. Mixed unions default to ``"string"``.
+    """
+
+    origin = get_origin(ann)
+    if origin is Union:
+        args = [a for a in get_args(ann) if a is not type(None)]  # Optional
+        if not args:
+            return "string"
+        types = {_annotation_to_type(a) for a in args}
+        if len(types) == 1:
+            return types.pop()
+        return "string"
+
+    if origin in (list, tuple, set, frozenset):
+        return "array"
+    if origin is dict:
+        return "object"
+    if origin is not None:
+        ann = origin
+
     if ann in (int, float):
         return "number"
     if ann is bool:
         return "boolean"
-    if ann in (dict, list):
+    if ann is dict:
         return "object"
+    if ann in (list, tuple, set, frozenset):
+        return "array"
     return "string"
 
 
@@ -28,8 +57,12 @@ def function_tool(func: F) -> dict[str, Any]:
     call the wrapped function via tool-calling.
     """
 
-    sig = inspect.signature(func)
-    hints = get_type_hints(func)
+    if func in _INTROSPECTION_CACHE:
+        sig, hints = _INTROSPECTION_CACHE[func]
+    else:
+        sig = inspect.signature(func)
+        hints = get_type_hints(func)
+        _INTROSPECTION_CACHE[func] = (sig, hints)
 
     properties: dict[str, Any] = {}
     required: list[str] = []
