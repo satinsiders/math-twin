@@ -142,8 +142,13 @@ def _step_parse(data: dict[str, Any]) -> dict[str, Any]:
             input=data["problem_text"] + "\n" + data["solution"],
             tools=_TOOLS,
         )
-        data["parsed"] = get_final_output(res)
     except Exception as exc:  # pragma: no cover - defensive
+        data["error"] = f"ParserAgent failed: {exc}"
+        return data
+
+    try:
+        data["parsed"] = safe_json(get_final_output(res))
+    except ValueError as exc:
         data["error"] = f"ParserAgent failed: {exc}"
     return data
 
