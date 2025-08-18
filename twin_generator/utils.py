@@ -4,7 +4,12 @@ from __future__ import annotations
 import json
 import os
 import re
-from typing import Any, cast
+from typing import Any, Callable, cast
+
+try:  # pragma: no cover - optional dependency
+    import json5  # type: ignore
+except Exception:  # pragma: no cover - fall back to stdlib
+    json5 = None
 
 # ---------------------------------------------------------------------------
 # Generic agent output handling
@@ -22,49 +27,72 @@ def get_final_output(res: Any) -> str:  # noqa: ANN401 – generic return
 
 
 # ---------------------------------------------------------------------------
-# JSON safety wrapper
+# JSON safety helpers
 # ---------------------------------------------------------------------------
 
+def _extract_json_block(text: str) -> str:
+    """Return the most likely JSON substring from *text*."""
+    fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
+    if fenced:
+        return fenced.group(1)
+    bracketed = re.search(r"\{[\s\S]*\}", text)
+    if bracketed:
+        return bracketed.group(0)
+    return text
+
+
+def _repair_json(text: str) -> str:
+    """Attempt light‑weight JSON repairs and return the adjusted string."""
+    repaired = text
+    repaired = re.sub(r"(?<!\\)'", '"', repaired)
+    open_braces = repaired.count("{")
+    close_braces = repaired.count("}")
+    if open_braces > close_braces:
+        repaired += "}" * (open_braces - close_braces)
+    open_brackets = repaired.count("[")
+    close_brackets = repaired.count("]")
+    if open_brackets > close_brackets:
+        repaired += "]" * (open_brackets - close_brackets)
+    repaired = re.sub(r",\s*(?=[}\]])", "", repaired)
+    repaired = re.sub(r"\\([^\"\\/bfnrtu])", r"\\\\\1", repaired)
+    return repaired
+
+
+def _parsers() -> list[Callable[[str], Any]]:
+    parsers: list[Callable[[str], Any]] = []
+    if json5 is not None:
+        parsers.append(json5.loads)
+    parsers.append(json.loads)
+    return parsers
+
+
 def safe_json(text: str) -> dict[str, Any]:
-    """Best‑effort JSON repair loader with fenced‑code and bracket fallbacks."""
+    """Best‑effort JSON loader with tolerant parsing and repair attempts."""
     text = text.strip()
     if not text:
         raise ValueError("Agent output was empty")
 
-    fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
-    if fenced:
-        text = fenced.group(1)
-    else:
-        bracketed = re.search(r"\{[\s\S]*\}", text)
-        if bracketed:
-            text = bracketed.group(0)
+    original_snippet = text.replace("\n", " ")[:300]
+    text = _extract_json_block(text)
 
-    try:
-        return cast(dict[str, Any], json.loads(text))
-    except json.JSONDecodeError as exc:
-        repaired = text
-        # Replace single quotes with double quotes
-        repaired = re.sub(r"(?<!\\)'", '"', repaired)
-        # Balance braces and brackets
-        open_braces = repaired.count("{")
-        close_braces = repaired.count("}")
-        if open_braces > close_braces:
-            repaired += "}" * (open_braces - close_braces)
-        open_brackets = repaired.count("[")
-        close_brackets = repaired.count("]")
-        if open_brackets > close_brackets:
-            repaired += "]" * (open_brackets - close_brackets)
-        # Remove trailing commas in objects/arrays
-        repaired = re.sub(r",\s*(?=[}\]])", "", repaired)
+    for parser in _parsers():
         try:
-            return cast(dict[str, Any], json.loads(repaired))
+            return cast(dict[str, Any], parser(text))
         except Exception:
-            repaired = re.sub(r"\\([^\"\\/bfnrtu])", r"\\\\\1", repaired)
-            try:
-                return cast(dict[str, Any], json.loads(repaired))
-            except Exception:
-                snippet = text.strip().replace("\n", " ")[:300]
-                raise ValueError(f"Agent output was not valid JSON: {snippet}...") from exc
+            pass
+
+    repaired = _repair_json(text)
+    for parser in _parsers():
+        try:
+            return cast(dict[str, Any], parser(repaired))
+        except Exception:
+            pass
+
+    repaired_snippet = repaired.strip().replace("\n", " ")[:300]
+    raise ValueError(
+        "Agent output was not valid JSON even after repair. "
+        f"Original snippet: {original_snippet}... Repaired snippet: {repaired_snippet}..."
+    )
 
 
 # ---------------------------------------------------------------------------
