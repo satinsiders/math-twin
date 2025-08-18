@@ -45,6 +45,9 @@ def _repair_json(text: str) -> str:
     """Attempt light‑weight JSON repairs and return the adjusted string."""
     repaired = text
     repaired = re.sub(r"(?<!\\)'", '"', repaired)
+    # Strip both line (`//`) and block (`/* */`) comments
+    repaired = re.sub(r"//.*?(?=\n|$)", "", repaired)
+    repaired = re.sub(r"/\*.*?\*/", "", repaired, flags=re.DOTALL)
     open_braces = repaired.count("{")
     close_braces = repaired.count("}")
     if open_braces > close_braces:

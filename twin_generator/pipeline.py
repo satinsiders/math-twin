@@ -42,7 +42,6 @@ from .pipeline_helpers import (  # noqa: F401
 
 __all__ = ["generate_twin"]
 
-
 _PIPELINE = _Graph(
     steps=[
         _step_parse,
