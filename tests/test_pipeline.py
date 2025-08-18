@@ -121,6 +121,46 @@ def test_generate_twin_template_empty(monkeypatch: pytest.MonkeyPatch) -> None:
     assert out.get("error") == "TemplateAgent failed: Agent output was empty"
 
 
+def test_generate_twin_template_retry(monkeypatch: pytest.MonkeyPatch) -> None:
+    call_counts: dict[str, int] = {}
+
+    def mock_run_sync(agent: Any, input: Any, tools: Any | None = None) -> SimpleNamespace:
+        name = agent.name
+        call_counts[name] = call_counts.get(name, 0) + 1
+        if name == "ParserAgent":
+            return SimpleNamespace(final_output="parsed")
+        if name == "ConceptAgent":
+            return SimpleNamespace(final_output="concept")
+        if name == "TemplateAgent":
+            if call_counts[name] == 1:
+                return SimpleNamespace(final_output="not json")
+            return SimpleNamespace(final_output='{"visual": {"type": "none"}, "answer_expression": "0"}')
+        if name == "SampleAgent":
+            return SimpleNamespace(final_output='{}')
+        if name == "SymbolicSolveAgent":
+            return SimpleNamespace(final_output="0")
+        if name == "SymbolicSimplifyAgent":
+            return SimpleNamespace(final_output="0")
+        if name == "StemChoiceAgent":
+            return SimpleNamespace(final_output='{"twin_stem": "Q", "choices": [1], "rationale": "r"}')
+        if name == "FormatterAgent":
+            return SimpleNamespace(
+                final_output=(
+                    '{"twin_stem": "Q", "choices": [1], '
+                    '"answer_index": 0, "answer_value": 1, "rationale": "r"}'
+                )
+            )
+        if name == "QAAgent":
+            return SimpleNamespace(final_output="pass")
+        raise AssertionError("unexpected agent")
+
+    monkeypatch.setattr(pipeline.AgentsRunner, "run_sync", mock_run_sync)
+
+    out = pipeline.generate_twin("p", "s")
+    assert out.get("error") is None
+    assert call_counts.get("TemplateAgent") == 2
+
+
 def test_generate_twin_qa_retry(monkeypatch: pytest.MonkeyPatch) -> None:
     call_counts: dict[str, int] = {}
 
@@ -163,4 +203,27 @@ def test_step_visual_handles_non_dict() -> None:
     data = {"template": {"visual": "not-a-dict"}}
     out = pipeline._step_visual(dict(data))
     assert out == data
+
+
+def test_step_sample_rejects_invalid_params(monkeypatch: pytest.MonkeyPatch) -> None:
+    def mock_run_sync(agent: Any, input: Any, tools: Any | None = None) -> SimpleNamespace:
+        assert agent.name == "SampleAgent"
+        return SimpleNamespace(final_output='{"x": "oops"}')
+
+    monkeypatch.setattr(pipeline.AgentsRunner, "run_sync", mock_run_sync)
+
+    out = pipeline._step_sample({"template": {}})
+    assert out.get("error") == "SampleAgent produced non-numeric params: x='oops'"
+
+
+def test_step_operations_rejects_invalid_params(monkeypatch: pytest.MonkeyPatch) -> None:
+    def mock_run_sync(agent: Any, input: Any, tools: Any | None = None) -> SimpleNamespace:
+        assert agent.name == "OperationsAgent"
+        return SimpleNamespace(final_output='{"params": {"x": "oops"}}')
+
+    monkeypatch.setattr(pipeline.AgentsRunner, "run_sync", mock_run_sync)
+
+    data = {"template": {"operations": [1]}, "params": {}}
+    out = pipeline._step_operations(data)
+    assert out.get("error") == "OperationsAgent produced non-numeric params: x='oops'"
 
