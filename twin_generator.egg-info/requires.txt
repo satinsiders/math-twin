@@ -1,6 +1,0 @@
-sympy
-matplotlib
-pillow
-numpy
-python-dotenv
-openai-agents
