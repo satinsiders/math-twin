@@ -42,12 +42,29 @@ def safe_json(text: str) -> dict[str, Any]:
     try:
         return cast(dict[str, Any], json.loads(text))
     except json.JSONDecodeError as exc:
-        repaired = re.sub(r"\\([^\"\\/bfnrtu])", r"\\\\\1", text)
+        repaired = text
+        # Replace single quotes with double quotes
+        repaired = re.sub(r"(?<!\\)'", '"', repaired)
+        # Balance braces and brackets
+        open_braces = repaired.count("{")
+        close_braces = repaired.count("}")
+        if open_braces > close_braces:
+            repaired += "}" * (open_braces - close_braces)
+        open_brackets = repaired.count("[")
+        close_brackets = repaired.count("]")
+        if open_brackets > close_brackets:
+            repaired += "]" * (open_brackets - close_brackets)
+        # Remove trailing commas in objects/arrays
+        repaired = re.sub(r",\s*(?=[}\]])", "", repaired)
         try:
             return cast(dict[str, Any], json.loads(repaired))
         except Exception:
-            snippet = text.strip().replace("\n", " ")[:300]
-            raise ValueError(f"Agent output was not valid JSON: {snippet}...") from exc
+            repaired = re.sub(r"\\([^\"\\/bfnrtu])", r"\\\\\1", repaired)
+            try:
+                return cast(dict[str, Any], json.loads(repaired))
+            except Exception:
+                snippet = text.strip().replace("\n", " ")[:300]
+                raise ValueError(f"Agent output was not valid JSON: {snippet}...") from exc
 
 
 # ---------------------------------------------------------------------------
