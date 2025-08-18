@@ -45,6 +45,26 @@ __all__ = ["generate_twin"]
 _TOOLS = [calc_answer_tool, render_graph_tool, make_html_table_tool]
 _TEMPLATE_TOOLS = [calc_answer_tool]
 _TEMPLATE_MAX_RETRIES = 3
+_JSON_MAX_RETRIES = 3
+
+
+def run_json_agent(
+    agent: type,
+    payload: str,
+    *,
+    tools: list[Any] | None = None,
+    max_retries: int = _JSON_MAX_RETRIES,
+) -> dict[str, Any]:
+    """Execute an agent expecting JSON output with retry logic."""
+    attempts = 0
+    while True:
+        res = AgentsRunner.run_sync(agent, input=payload, tools=tools)
+        try:
+            return safe_json(get_final_output(res))
+        except ValueError:
+            attempts += 1
+            if attempts >= max_retries:
+                raise
 
 
 # ---------------------------------------------------------------------------
@@ -189,12 +209,9 @@ def _step_template(data: dict[str, Any]) -> dict[str, Any]:
 
 def _step_sample(data: dict[str, Any]) -> dict[str, Any]:
     try:
-        res = AgentsRunner.run_sync(
-            SampleAgent,
-            input=json.dumps({"template": data["template"]}),
-            tools=_TOOLS,
+        params = run_json_agent(
+            SampleAgent, json.dumps({"template": data["template"]}), tools=_TOOLS
         )
-        params = safe_json(get_final_output(res))
         if not isinstance(params, dict):
             data["error"] = "SampleAgent produced non-dict params"
             return data
@@ -237,12 +254,7 @@ def _step_operations(data: dict[str, Any]) -> dict[str, Any]:
 
     payload = json.dumps({"data": data, "operations": ops})
     try:
-        res = AgentsRunner.run_sync(
-            OperationsAgent,
-            input=payload,
-            tools=_TOOLS,
-        )
-        out = safe_json(get_final_output(res))
+        out = run_json_agent(OperationsAgent, payload, tools=_TOOLS)
         if isinstance(out, dict):
             params_out = out.get("params")
             if isinstance(params_out, dict):
@@ -299,12 +311,9 @@ def _step_stem_choice(data: dict[str, Any]) -> dict[str, Any]:
         payload["table_html"] = data["table_html"]
 
     try:
-        res = AgentsRunner.run_sync(
-            StemChoiceAgent,
-            input=json.dumps(payload),
-            tools=_TOOLS,
+        data["stem_data"] = run_json_agent(
+            StemChoiceAgent, json.dumps(payload), tools=_TOOLS
         )
-        data["stem_data"] = safe_json(get_final_output(res))
     except Exception as exc:  # pragma: no cover - defensive
         data["error"] = f"StemChoiceAgent failed: {exc}"
     return data
@@ -325,12 +334,7 @@ def _step_format(data: dict[str, Any]) -> dict[str, Any]:
         payload["table_html"] = data["table_html"]
 
     try:
-        res = AgentsRunner.run_sync(
-            FormatterAgent,
-            input=json.dumps(payload),
-            tools=_TOOLS,
-        )
-        out = safe_json(get_final_output(res))
+        out = run_json_agent(FormatterAgent, json.dumps(payload), tools=_TOOLS)
     except Exception as exc:  # pragma: no cover - defensive
         data["error"] = f"FormatterAgent failed: {exc}"
         return data
