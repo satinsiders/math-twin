@@ -12,6 +12,9 @@ from .pipeline_helpers import AgentsRunner, _TOOLS
 from .utils import get_final_output
 from .pipeline_state import PipelineState
 
+# Default number of times to retry a step when QA checks fail.
+QA_MAX_RETRIES = 5
+
 
 @dataclass(slots=True)
 class _Graph:
@@ -26,7 +29,7 @@ class _Runner:
         graph: _Graph,
         *,
         verbose: bool = False,
-        qa_max_retries: int | None = None,
+        qa_max_retries: int | None = QA_MAX_RETRIES,
     ) -> None:
         self.graph = graph
         self.verbose = verbose

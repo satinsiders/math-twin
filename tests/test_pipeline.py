@@ -231,6 +231,27 @@ def test_generate_twin_qa_retry(monkeypatch: pytest.MonkeyPatch) -> None:
     assert call_counts.get("QAAgent") == 10
 
 
+def test_generate_twin_qa_retry_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+    """generate_twin should surface an error after exceeding QA retry limit."""
+    call_counts: dict[str, int] = {}
+
+    def mock_run_sync(agent: Any, input: Any, tools: Any | None = None) -> SimpleNamespace:
+        name = agent.name
+        call_counts[name] = call_counts.get(name, 0) + 1
+        if name == "ParserAgent":
+            return SimpleNamespace(final_output="{}")
+        if name == "QAAgent":
+            return SimpleNamespace(final_output="fail")
+        raise AssertionError("unexpected agent")
+
+    monkeypatch.setattr(pipeline.AgentsRunner, "run_sync", mock_run_sync)
+
+    out = pipeline.generate_twin("p", "s")
+    assert out.error == "QA failed for parse: fail"
+    assert call_counts.get("ParserAgent") == 5
+    assert call_counts.get("QAAgent") == 5
+
+
 def test_step_visual_handles_non_dict() -> None:
     state = PipelineState(template={"visual": "not-a-dict"})
     out = pipeline._step_visual(state)
