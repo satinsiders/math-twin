@@ -24,35 +24,36 @@ from .pipeline_helpers import (
 )
 from .tools import _calc_answer, _make_html_table, _render_graph, _sanitize_params
 from .utils import coerce_answers, validate_output
+from .pipeline_state import PipelineState
 
 
-def _step_parse(data: dict[str, Any]) -> dict[str, Any]:
+def _step_parse(state: PipelineState) -> PipelineState:
     out, err = invoke_agent(
         ParserAgent,
-        data["problem_text"] + "\n" + data["solution"],
+        state.problem_text + "\n" + state.solution,
         tools=_TOOLS,
         max_retries=1,
     )
     if err:
-        data["error"] = err
-        return data
-    data["parsed"] = cast(dict[str, Any], out)
-    return data
+        state.error = err
+        return state
+    state.parsed = cast(dict[str, Any], out)
+    return state
 
 
-def _step_concept(data: dict[str, Any]) -> dict[str, Any]:
+def _step_concept(state: PipelineState) -> PipelineState:
     out, err = invoke_agent(
-        ConceptAgent, str(data["parsed"]), tools=_TOOLS, expect_json=False
+        ConceptAgent, str(state.parsed), tools=_TOOLS, expect_json=False
     )
     if err:
-        data["error"] = err
-        return data
-    data["concept"] = cast(str, out)
-    return data
+        state.error = err
+        return state
+    state.concept = cast(str, out)
+    return state
 
 
-def _step_template(data: dict[str, Any]) -> dict[str, Any]:
-    payload = json.dumps({"parsed": data["parsed"], "concept": data["concept"]})
+def _step_template(state: PipelineState) -> PipelineState:
+    payload = json.dumps({"parsed": state.parsed, "concept": state.concept})
     out, err = invoke_agent(
         TemplateAgent,
         payload,
@@ -60,146 +61,165 @@ def _step_template(data: dict[str, Any]) -> dict[str, Any]:
         max_retries=_TEMPLATE_MAX_RETRIES,
     )
     if err:
-        data["error"] = err
-        return data
-    data["template"] = cast(dict[str, Any], out)
-    return data
+        state.error = err
+        return state
+    state.template = cast(dict[str, Any], out)
+    return state
 
 
-def _step_sample(data: dict[str, Any]) -> dict[str, Any]:
+def _step_sample(state: PipelineState) -> PipelineState:
     out, err = invoke_agent(
-        SampleAgent, json.dumps({"template": data["template"]}), tools=_TOOLS
+        SampleAgent, json.dumps({"template": state.template}), tools=_TOOLS
     )
     if err:
-        data["error"] = err
-        return data
+        state.error = err
+        return state
     if not isinstance(out, dict):
-        data["error"] = "SampleAgent produced non-dict params"
-        return data
+        state.error = "SampleAgent produced non-dict params"
+        return state
     _, skipped = _sanitize_params(out)
     if skipped:
         bad = ", ".join(f"{k}={out[k]!r}" for k in skipped)
-        data["error"] = f"SampleAgent produced non-numeric params: {bad}"
-        return data
-    data["params"] = out
-    return data
+        state.error = f"SampleAgent produced non-numeric params: {bad}"
+        return state
+    state.params = out
+    return state
 
 
-def _step_symbolic(data: dict[str, Any]) -> dict[str, Any]:
-    payload = json.dumps({"template": data["template"], "params": data["params"]})
+def _step_symbolic(state: PipelineState) -> PipelineState:
+    payload = json.dumps({"template": state.template, "params": state.params})
     sol, err = invoke_agent(
         SymbolicSolveAgent, payload, tools=_TOOLS, expect_json=False
     )
     if err:
-        data["symbolic_error"] = err.replace("SymbolicSolveAgent", "Symbolic agents")
-        return data
-    data["symbolic_solution"] = cast(str, sol)
+        state.symbolic_error = err.replace("SymbolicSolveAgent", "Symbolic agents")
+        return state
+    state.symbolic_solution = cast(str, sol)
     simp, err = invoke_agent(
-        SymbolicSimplifyAgent, data["symbolic_solution"], tools=_TOOLS, expect_json=False
+        SymbolicSimplifyAgent,
+        state.symbolic_solution,
+        tools=_TOOLS,
+        expect_json=False,
     )
     if err:
-        data["symbolic_error"] = err.replace("SymbolicSimplifyAgent", "Symbolic agents")
-        return data
-    data["symbolic_simplified"] = cast(str, simp)
-    return data
+        state.symbolic_error = err.replace("SymbolicSimplifyAgent", "Symbolic agents")
+        return state
+    state.symbolic_simplified = cast(str, simp)
+    return state
 
 
-def _step_operations(data: dict[str, Any]) -> dict[str, Any]:
-    ops = data.get("template", {}).get("operations") or []
+def _step_operations(state: PipelineState) -> PipelineState:
+    ops = state.template.get("operations") if isinstance(state.template, dict) else []
     if not ops:
-        data["skip_qa"] = True
-        return data
+        state.skip_qa = True
+        return state
 
-    payload = json.dumps({"data": data, "operations": ops})
+    payload = json.dumps({"data": state.__dict__, "operations": ops})
     out, err = invoke_agent(OperationsAgent, payload, tools=_TOOLS)
     if err:
-        data["error"] = err
-        return data
+        state.error = err
+        return state
     if isinstance(out, dict):
         params_out = out.get("params")
         if isinstance(params_out, dict):
             _, skipped = _sanitize_params(params_out)
             if skipped:
                 bad = ", ".join(f"{k}={params_out[k]!r}" for k in skipped)
-                data["error"] = f"OperationsAgent produced non-numeric params: {bad}"
-                return data
-        data.update(out)
-    return data
+                state.error = f"OperationsAgent produced non-numeric params: {bad}"
+                return state
+            state.params = params_out
+        for key, value in out.items():
+            if key == "params":
+                continue
+            if hasattr(state, key):
+                setattr(state, key, value)
+            else:
+                state.extras[key] = value
+    return state
 
 
-def _step_visual(data: dict[str, Any]) -> dict[str, Any]:
-    visual = data.get("template", {}).get("visual")
+def _step_visual(state: PipelineState) -> PipelineState:
+    visual = state.template.get("visual") if isinstance(state.template, dict) else None
     if not isinstance(visual, dict):
         visual = {"type": "none"}
-    force = bool(data.get("force_graph"))
-    user_spec = data.get("graph_spec")
+    force = bool(state.force_graph)
+    user_spec = state.graph_spec
 
     vtype = visual.get("type")
     if vtype == "graph":
         spec = visual.get("data", {}) or C.DEFAULT_GRAPH_SPEC
-        data["graph_path"] = _render_graph(json.dumps(spec))
-        return data
+        state.graph_path = _render_graph(json.dumps(spec))
+        return state
 
     if force:
         gspec = user_spec or C.DEFAULT_GRAPH_SPEC
-        data["graph_path"] = _render_graph(json.dumps(gspec))
-        return data
+        state.graph_path = _render_graph(json.dumps(gspec))
+        return state
 
     if vtype == "table":
-        data["table_html"] = _make_html_table(json.dumps(visual.get("data", {})))
-    return data
+        state.table_html = _make_html_table(json.dumps(visual.get("data", {})))
+    return state
 
 
-def _step_answer(data: dict[str, Any]) -> dict[str, Any]:
-    expr = data["template"].get("answer_expression", "0")
-    data["answer"] = _calc_answer(expr, json.dumps(data["params"]))
-    return data
+def _step_answer(state: PipelineState) -> PipelineState:
+    expr = state.template.get("answer_expression", "0") if isinstance(state.template, dict) else "0"
+    state.answer = _calc_answer(expr, json.dumps(state.params))
+    return state
 
 
-def _step_stem_choice(data: dict[str, Any]) -> dict[str, Any]:
+def _step_stem_choice(state: PipelineState) -> PipelineState:
     payload: dict[str, Any] = {
-        "template": data["template"],
-        "params": data["params"],
+        "template": state.template,
+        "params": state.params,
     }
-    if "graph_path" in data:
-        payload["graph_path"] = data["graph_path"]
-    if "table_html" in data:
-        payload["table_html"] = data["table_html"]
+    if state.graph_path:
+        payload["graph_path"] = state.graph_path
+    if state.table_html:
+        payload["table_html"] = state.table_html
 
     out, err = invoke_agent(StemChoiceAgent, json.dumps(payload), tools=_TOOLS)
     if err:
-        data["error"] = err
-        return data
-    data["stem_data"] = out
-    return data
+        state.error = err
+        return state
+    state.stem_data = out
+    return state
 
 
-def _step_format(data: dict[str, Any]) -> dict[str, Any]:
-    answer_value = str(data["answer"])
+def _step_format(state: PipelineState) -> PipelineState:
+    answer_value = str(state.answer)
 
     payload: dict[str, Any] = {
-        "twin_stem": data["stem_data"].get("twin_stem"),
-        "choices": data["stem_data"].get("choices"),
+        "twin_stem": state.stem_data.get("twin_stem") if state.stem_data else None,
+        "choices": state.stem_data.get("choices") if state.stem_data else None,
         "answer_value": answer_value,
-        "rationale": data["stem_data"].get("rationale"),
+        "rationale": state.stem_data.get("rationale") if state.stem_data else None,
     }
-    if "graph_path" in data:
-        payload["graph_path"] = data["graph_path"]
-    if "table_html" in data:
-        payload["table_html"] = data["table_html"]
+    if state.graph_path:
+        payload["graph_path"] = state.graph_path
+    if state.table_html:
+        payload["table_html"] = state.table_html
 
     out, err = invoke_agent(FormatterAgent, json.dumps(payload), tools=_TOOLS)
     if err:
-        data["error"] = err
-        return data
-    out = cast(dict[str, Any], out)
+        state.error = err
+        return state
+    out_dict = cast(dict[str, Any], out)
 
     # Pass-through assets in case the formatter dropped them
-    if "graph_path" in data:
-        out["graph_path"] = data["graph_path"]
-    if "table_html" in data:
-        out["table_html"] = data["table_html"]
+    if state.graph_path:
+        out_dict.setdefault("graph_path", state.graph_path)
+    if state.table_html:
+        out_dict.setdefault("table_html", state.table_html)
 
-    out = coerce_answers(out)
-    out = validate_output(out)
-    return out
+    out_dict = coerce_answers(out_dict)
+    out_dict = validate_output(out_dict)
+
+    state.twin_stem = out_dict.get("twin_stem")
+    state.choices = out_dict.get("choices")
+    state.answer_index = out_dict.get("answer_index")
+    state.answer_value = out_dict.get("answer_value")
+    state.rationale = out_dict.get("rationale")
+    state.errors = out_dict.get("errors")
+    state.graph_path = out_dict.get("graph_path", state.graph_path)
+    state.table_html = out_dict.get("table_html", state.table_html)
+    return state

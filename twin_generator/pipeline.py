@@ -1,7 +1,7 @@
 """Linear pipeline orchestration of agents, tools, and helpers."""
 from __future__ import annotations
 
-from typing import Any, cast
+
 
 from agents.run import Runner as AgentsRunner  # type: ignore  # noqa: F401
 
@@ -19,6 +19,7 @@ from .agents import (  # noqa: F401
     SymbolicSimplifyAgent,
 )
 from .pipeline_runner import _Graph, _Runner
+from .pipeline_state import PipelineState
 from .pipeline_steps import (
     _step_answer,
     _step_concept,
@@ -40,7 +41,7 @@ from .pipeline_helpers import (  # noqa: F401
     invoke_agent,
 )
 
-__all__ = ["generate_twin"]
+__all__ = ["generate_twin", "PipelineState"]
 
 _PIPELINE = _Graph(
     steps=[
@@ -65,15 +66,14 @@ def generate_twin(
     force_graph: bool = False,
     graph_spec: GraphSpec | None = None,
     verbose: bool = False,
-) -> dict[str, Any]:  # noqa: ANN401 – generic return
+) -> PipelineState:
     """Generate a twin SAT-style math question given a source problem/solution."""
     runner = _Runner(_PIPELINE, verbose=verbose)
-    result = runner.run(
-        {
-            "problem_text": problem_text,
-            "solution": solution_text,
-            "force_graph": force_graph,
-            "graph_spec": graph_spec,
-        }
+    state = PipelineState(
+        problem_text=problem_text,
+        solution=solution_text,
+        force_graph=force_graph,
+        graph_spec=graph_spec,
     )
-    return cast(dict[str, Any], result["output"])
+    result = runner.run(state)
+    return result
