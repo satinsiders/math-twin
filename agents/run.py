@@ -113,7 +113,15 @@ class Runner:
     def _execute_tool_calls(
         client: Any, resp: Any, tool_map: dict[str, Any]
     ) -> Any:
+        max_iterations = 10
+        iterations = 0
         while getattr(resp, "status", None) == "requires_action":
+            if iterations >= max_iterations:
+                status = getattr(resp, "status", None)
+                raise RuntimeError(
+                    "tool calls did not resolve after "
+                    f"{max_iterations} iterations; status: {status}"
+                )
             action = getattr(resp, "required_action")
             submit = getattr(action, "submit_tool_outputs")
             calls = getattr(submit, "tool_calls", [])
@@ -132,4 +140,5 @@ class Runner:
             resp = client.responses.submit_tool_outputs(
                 response_id=resp.id, tool_outputs=outputs
             )
+            iterations += 1
         return resp
