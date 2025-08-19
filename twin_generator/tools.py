@@ -7,7 +7,9 @@ import os
 import tempfile
 import warnings
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
+
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 
 from agents.tool import function_tool
 
@@ -162,6 +164,16 @@ def _sanitize_params(raw: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
     return cleaned, skipped
 
 
+def _run_with_timeout(func: Callable[..., Any], seconds: int, *args: Any, **kwargs: Any) -> Any:
+    """Execute ``func`` with a time limit, raising ``TimeoutError`` on expiry."""
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(func, *args, **kwargs)
+        try:
+            return future.result(timeout=seconds)
+        except FutureTimeoutError as exc:
+            raise TimeoutError("timed out") from exc
+
+
 def _calc_answer(expression: str, params_json: str) -> Any:  # noqa: ANN401 â€“Â generic return
     """Evaluate `expression` under the provided `params`.
 
@@ -169,10 +181,6 @@ def _calc_answer(expression: str, params_json: str) -> Any:  # noqa: ANN401 â€“Â
     * Falls back to numeric evaluation
     * Coerces nearâ€‘integers to ``int`` when appropriate
     """
-    import signal
-    from contextlib import contextmanager
-    from typing import Iterator
-
     import sympy as sp
     import warnings
 
@@ -181,24 +189,10 @@ def _calc_answer(expression: str, params_json: str) -> Any:  # noqa: ANN401 â€“Â
     if skipped:
         warnings.warn(f"Skipped non-numeric params: {', '.join(skipped)}")
 
-    @contextmanager
-    def _time_limit(seconds: int) -> Iterator[None]:
-        def _handler(signum: int, frame: Any) -> None:  # noqa: ARG001
-            raise TimeoutError("timed out")
-
-        old_handler = signal.signal(signal.SIGALRM, _handler)
-        signal.setitimer(signal.ITIMER_REAL, float(seconds))
-        try:
-            yield
-        finally:
-            signal.setitimer(signal.ITIMER_REAL, 0.0)
-            signal.signal(signal.SIGALRM, old_handler)
-
     def _make_safe(func: Any, fallback: Any) -> Any:
         def _wrapper(*args: Any, **kwargs: Any) -> Any:
             try:
-                with _time_limit(2):
-                    return func(*args, **kwargs)
+                return _run_with_timeout(func, 2, *args, **kwargs)
             except Exception:
                 return fallback(*args, **kwargs)
 
@@ -228,8 +222,7 @@ def _calc_answer(expression: str, params_json: str) -> Any:  # noqa: ANN401 â€“Â
             return e
         for t in targets:
             try:
-                with _time_limit(2):
-                    res = t.doit()
+                res = _run_with_timeout(t.doit, 2)
             except Exception:
                 res = t
             e = e.xreplace({t: res})
@@ -240,15 +233,13 @@ def _calc_answer(expression: str, params_json: str) -> Any:  # noqa: ANN401 â€“Â
     expr = _eval_advanced(expr)
 
     try:
-        with _time_limit(5):
-            exact_simpl = sp.simplify(expr)
+        exact_simpl = _run_with_timeout(sp.simplify, 5, expr)
     except Exception:
         exact_simpl = expr
 
     if getattr(exact_simpl, "free_symbols", set()):
         try:
-            with _time_limit(2):
-                result = sp.N(exact_simpl)
+            result = _run_with_timeout(sp.N, 2, exact_simpl)
         except Exception:
             result = exact_simpl
     else:

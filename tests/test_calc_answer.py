@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from twin_generator.tools import _calc_answer  # noqa: E402
+import twin_generator.tools as tools  # noqa: E402
 
 
 def test_calc_answer_diff() -> None:
@@ -34,3 +36,11 @@ def test_calc_answer_nested() -> None:
 def test_calc_answer_skips_bad_params() -> None:
     with pytest.warns(UserWarning):
         assert _calc_answer("x + y", '{"x": 1, "y": "oops"}') == "y + 1.0"
+
+
+def test_calc_answer_timeout_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _timeout(*args: Any, **kwargs: Any) -> Any:  # noqa: ANN401
+        raise TimeoutError
+
+    monkeypatch.setattr(tools, "_run_with_timeout", _timeout)
+    assert tools._calc_answer("diff(x**2, x)", '{}') == "Derivative(x**2, x)"
