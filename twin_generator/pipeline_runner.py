@@ -32,7 +32,7 @@ class _Runner:
         self.verbose = verbose
         self.qa_max_retries = qa_max_retries
         self.logger = logging.getLogger(__name__)
-        self.logger.setLevel(logging.DEBUG if verbose else logging.WARNING)
+        self.logger.setLevel(logging.INFO if verbose else logging.WARNING)
 
     def _execute_step(
         self,
@@ -67,7 +67,7 @@ class _Runner:
             if not json_required:
                 raise RuntimeError(f"QAAgent failed: {exc}")
             qa_out = f"non-serializable data: {exc}"
-            self.logger.debug(
+            self.logger.info(
                 "[twin-generator] step %d/%d: %s QA round %d: %s",
                 idx + 1,
                 total_steps,
@@ -81,7 +81,7 @@ class _Runner:
             qa_out = get_final_output(qa_res).strip().lower()
         except Exception as exc:  # pragma: no cover - defensive
             raise RuntimeError(f"QAAgent failed: {exc}")
-        self.logger.debug(
+        self.logger.info(
             "[twin-generator] step %d/%d: %s QA round %d: %s",
             idx + 1,
             total_steps,
@@ -100,7 +100,7 @@ class _Runner:
             name = step.__name__.replace("_step_", "").lstrip("_")
             attempts = 0
             while True:
-                self.logger.debug(
+                self.logger.info(
                     "[twin-generator] step %d/%d: %s attempt %d",
                     idx + 1,
                     len(steps),

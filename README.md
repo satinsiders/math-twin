@@ -28,7 +28,7 @@ python -m twin_generator.cli --problem path/to/problem.txt --solution path/to/so
 python -m twin_generator.cli --demo
 ```
 
-Passing `--graph-demo` runs a demo that produces a graph visual. Append `--preview` to automatically preview the generated graph if any. Use `--verbose` to see each pipeline step.
+Passing `--graph-demo` runs a demo that produces a graph visual. Append `--preview` to automatically preview the generated graph if any. Use `--log-level INFO` (or `DEBUG`) to see each pipeline step.
 
 ## Tool annotation support
 

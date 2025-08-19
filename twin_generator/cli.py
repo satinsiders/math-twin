@@ -48,14 +48,27 @@ def _parse_cli(argv: list[str] | None = None) -> argparse.Namespace:  # noqa: D4
     parser.add_argument("--graph-demo", action="store_true", help="Run demo with graph visual")
     parser.add_argument("--out", help="Write JSON output to file")
     parser.add_argument("--preview", action="store_true", help="Preview graph PNG if generated")
-    parser.add_argument("--verbose", action="store_true", help="Print progress steps")
+    parser.add_argument(
+        "--log-level",
+        choices=["WARNING", "INFO", "DEBUG"],
+        default="WARNING",
+        help="Logging level for twin_generator",
+    )
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> None:  # noqa: D401 – imperative mood
     ns = _parse_cli(argv)
 
-    logging.basicConfig(level=logging.DEBUG if ns.verbose else logging.WARNING)
+    logging.basicConfig(level=logging.WARNING)
+    level = getattr(logging, ns.log_level)
+    pkg_logger = logging.getLogger("twin_generator")
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter(logging.BASIC_FORMAT))
+    handler.setLevel(level)
+    pkg_logger.addHandler(handler)
+    pkg_logger.propagate = False
+    pkg_logger.setLevel(level)
 
     if ns.demo or ns.graph_demo:
         problem_text: str = C._GRAPH_PROBLEM if ns.graph_demo else C._DEMO_PROBLEM
@@ -74,7 +87,7 @@ def main(argv: list[str] | None = None) -> None:  # noqa: D401 – imperative m
         solution_text,
         force_graph=bool(ns.graph_demo),
         graph_spec=C.DEFAULT_GRAPH_SPEC if ns.graph_demo else None,
-        verbose=bool(ns.verbose),
+        verbose=ns.log_level in {"INFO", "DEBUG"},
     )
 
     auto_preview = ns.preview or ns.graph_demo
