@@ -114,7 +114,31 @@ def _step_operations(state: PipelineState) -> PipelineState:
         state.skip_qa = True
         return state
 
-    payload = json.dumps({"data": state.__dict__, "operations": ops})
+    # Only include the template, params, and intermediates explicitly referenced by
+    # the operations rather than the entire pipeline state.  This keeps the payload
+    # concise and avoids leaking unrelated data to the agent.
+    extra_fields: set[str] = set()
+    for op in ops:
+        if not isinstance(op, dict):
+            continue
+        for key, value in op.items():
+            if key in {"expr", "output", "outputs"}:
+                continue
+            if isinstance(value, str):
+                if hasattr(state, value):
+                    extra_fields.add(value)
+            elif isinstance(value, list):
+                for item in value:
+                    if isinstance(item, str) and hasattr(state, item):
+                        extra_fields.add(item)
+
+    data: dict[str, Any] = {"template": state.template, "params": state.params}
+    for field in extra_fields:
+        val = getattr(state, field)
+        if val is not None:
+            data[field] = val
+
+    payload = json.dumps({"data": data, "operations": ops})
     out, err = invoke_agent(OperationsAgent, payload, tools=_TOOLS)
     if err:
         state.error = err
@@ -128,8 +152,21 @@ def _step_operations(state: PipelineState) -> PipelineState:
                 state.error = f"OperationsAgent produced non-numeric params: {bad}"
                 return state
             state.params = params_out
+        expected_outputs: set[str] = set()
+        for op in ops:
+            if isinstance(op, dict):
+                out_key = op.get("output")
+                if isinstance(out_key, str):
+                    expected_outputs.add(out_key)
+                else:
+                    out_vals = op.get("outputs")
+                    if isinstance(out_vals, list):
+                        expected_outputs.update(
+                            str(o) for o in out_vals if isinstance(o, str)
+                        )
+
         for key, value in out.items():
-            if key == "params":
+            if key == "params" or key not in expected_outputs:
                 continue
             if hasattr(state, key):
                 setattr(state, key, value)
