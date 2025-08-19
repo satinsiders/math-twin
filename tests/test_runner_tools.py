@@ -1,17 +1,22 @@
+from __future__ import annotations
+
 import json
 import sys
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
+
+import pytest
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from agents.run import Runner  # noqa: E402
 
 
-def test_sanitize_tools_caches_by_name():
+def test_sanitize_tools_caches_by_name() -> None:
     Runner._SANITIZED_CACHE.clear()
 
-    def func():
+    def func() -> str:
         return "ok"
 
     tool1 = {"name": "foo", "_func": func, "desc": "1"}
@@ -23,7 +28,7 @@ def test_sanitize_tools_caches_by_name():
     assert sanitized1[0] is sanitized2[0]
 
 
-def test_execute_tool_calls_runs_tools_and_returns_response():
+def test_execute_tool_calls_runs_tools_and_returns_response() -> None:
     def add(x: int, y: int) -> int:
         return x + y
 
@@ -41,7 +46,7 @@ def test_execute_tool_calls_runs_tools_and_returns_response():
     final_resp = SimpleNamespace(status="done", output_text="ok")
 
     class FakeResponses:
-        def submit_tool_outputs(self, response_id, tool_outputs):
+        def submit_tool_outputs(self, response_id: str, tool_outputs: list[dict[str, str]]) -> SimpleNamespace:
             final_resp.received = tool_outputs
             return final_resp
 
@@ -53,3 +58,29 @@ def test_execute_tool_calls_runs_tools_and_returns_response():
     assert final_resp.received == [
         {"tool_call_id": "1", "output": "3"}
     ]
+
+
+def test_execute_tool_calls_aborts_when_status_never_resolves() -> None:
+    resp = SimpleNamespace(
+        status="requires_action",
+        required_action=SimpleNamespace(
+            submit_tool_outputs=SimpleNamespace(tool_calls=[])
+        ),
+        id="resp1",
+    )
+
+    class FakeResponses:
+        def __init__(self) -> None:
+            self.count = 0
+
+        def submit_tool_outputs(self, response_id: str, tool_outputs: list[Any]) -> SimpleNamespace:
+            self.count += 1
+            return resp
+
+    client = SimpleNamespace(responses=FakeResponses())
+
+    with pytest.raises(RuntimeError) as excinfo:
+        Runner._execute_tool_calls(client, resp, {})
+
+    assert "requires_action" in str(excinfo.value)
+    assert client.responses.count == 10

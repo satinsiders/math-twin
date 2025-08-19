@@ -67,4 +67,4 @@ def test_generate_twin_invalid_json(monkeypatch: pytest.MonkeyPatch, bad_agent: 
     monkeypatch.setattr(pipeline.AgentsRunner, "run_sync", mock_run_sync)
 
     out = pipeline.generate_twin("p", "s")
-    assert out.get("error", "").startswith(f"{bad_agent} failed:")
+    assert out.error is not None and out.error.startswith(f"{bad_agent} failed:")

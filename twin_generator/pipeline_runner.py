@@ -3,17 +3,19 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass
-from typing import Any, Callable
+import copy
+from dataclasses import asdict, dataclass
+from typing import Callable
 
 from .agents import QAAgent
 from .pipeline_helpers import AgentsRunner, _TOOLS
 from .utils import get_final_output
+from .pipeline_state import PipelineState
 
 
 @dataclass(slots=True)
 class _Graph:
-    steps: list[Callable[[dict[str, Any]], dict[str, Any]]]
+    steps: list[Callable[[PipelineState], PipelineState]]
 
 
 class _Runner:
@@ -33,30 +35,34 @@ class _Runner:
         self.logger.setLevel(logging.INFO if verbose else logging.WARNING)
 
     def _execute_step(
-        self, step: Callable[[dict[str, Any]], dict[str, Any]], data: dict[str, Any]
+        self,
+        step: Callable[[PipelineState], PipelineState],
+        data: PipelineState,
     ) -> tuple[
-        dict[str, Any],
+        PipelineState,
         bool,
-        list[Callable[[dict[str, Any]], dict[str, Any]]] | None,
-        dict[str, Any],
+        list[Callable[[PipelineState], PipelineState]] | None,
+        PipelineState,
     ]:
-        before = dict(data)
+        before = copy.deepcopy(data)
         result = step(data)
-        skip_qa = bool(result.pop("skip_qa", False))
-        next_steps = result.pop("next_steps", None)
+        skip_qa = bool(result.skip_qa)
+        next_steps = result.next_steps
+        result.skip_qa = False
+        result.next_steps = None
         return result, skip_qa, next_steps, before
 
     def _qa_check(
         self,
         name: str,
-        data: dict[str, Any],
+        data: PipelineState,
         idx: int,
         attempts: int,
         total_steps: int,
         json_required: bool,
     ) -> tuple[bool, str]:
         try:
-            qa_in = json.dumps({"step": name, "data": data})
+            qa_in = json.dumps({"step": name, "data": asdict(data)})
         except (TypeError, ValueError) as exc:
             if not json_required:
                 raise RuntimeError(f"QAAgent failed: {exc}")
@@ -85,8 +91,8 @@ class _Runner:
         )
         return qa_out == "pass", qa_out
 
-    def run(self, inputs: dict[str, Any]) -> dict[str, Any]:
-        data = dict(inputs)
+    def run(self, inputs: PipelineState) -> PipelineState:
+        data = copy.deepcopy(inputs)
         steps = list(self.graph.steps)
         idx = 0
         while idx < len(steps):
@@ -102,8 +108,8 @@ class _Runner:
                     attempts + 1,
                 )
                 data, skip_qa, next_steps, before = self._execute_step(step, data)
-                if "error" in data:
-                    return {"output": data}
+                if data.error is not None:
+                    return data
                 if skip_qa:
                     if next_steps:
                         steps[idx + 1 : idx + 1] = next_steps
@@ -115,7 +121,8 @@ class _Runner:
                         name, data, idx, attempts, len(steps), json_required
                     )
                 except RuntimeError as exc:
-                    return {"output": {"error": str(exc)}}
+                    data.error = str(exc)
+                    return data
                 if passed:
                     if next_steps:
                         steps[idx + 1 : idx + 1] = next_steps
@@ -125,11 +132,8 @@ class _Runner:
                     self.qa_max_retries is not None
                     and attempts >= self.qa_max_retries
                 ):
-                    return {
-                        "output": {
-                            "error": f"QA failed for {name}: {qa_out}",
-                        }
-                    }
+                    data.error = f"QA failed for {name}: {qa_out}"
+                    return data
                 data = before
             idx += 1
-        return {"output": data}
+        return data

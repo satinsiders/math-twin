@@ -32,21 +32,21 @@ def test_runner_handles_non_serializable(monkeypatch: pytest.MonkeyPatch, always
 
     monkeypatch.setattr(pipeline.AgentsRunner, "run_sync", mock_run_sync)
 
-    def _step_bad(data: dict[str, Any]) -> dict[str, Any]:
+    def _step_bad(state: pipeline.PipelineState) -> pipeline.PipelineState:
         res = pipeline.AgentsRunner.run_sync(pipeline.ParserAgent, input="x")
-        data["bad"] = res.final_output
-        return data
+        state.extras["bad"] = res.final_output
+        return state
 
     monkeypatch.setattr(pipeline, "_JSON_STEPS", set(pipeline._JSON_STEPS | {"bad"}))
 
     runner = pipeline._Runner(pipeline._Graph([_step_bad]), qa_max_retries=2)
-    out = runner.run({})["output"]
+    out = runner.run(pipeline.PipelineState())
     if always_fail:
-        assert out["error"].startswith("QA failed for bad: non-serializable")
+        assert out.error.startswith("QA failed for bad: non-serializable")
         assert call_counts.get("ParserAgent") == 2
         assert call_counts.get("QAAgent") is None
     else:
-        assert out.get("error") is None
-        assert out["bad"] == {"ok": 1}
+        assert out.error is None
+        assert out.extras["bad"] == {"ok": 1}
         assert call_counts.get("ParserAgent") == 2
         assert call_counts.get("QAAgent") == 1

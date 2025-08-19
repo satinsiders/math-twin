@@ -7,10 +7,10 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Any
+from dataclasses import asdict
 
 from . import constants as C
-from .pipeline import generate_twin
+from .pipeline import PipelineState, generate_twin
 
 __all__ = ["main"]
 
@@ -82,7 +82,7 @@ def main(argv: list[str] | None = None) -> None:  # noqa: D401 – imperative m
     if "OPENAI_API_KEY" not in os.environ:
         sys.exit("Error: Set OPENAI_API_KEY before running.")
 
-    out: dict[str, Any] = generate_twin(
+    out: PipelineState = generate_twin(
         problem_text,
         solution_text,
         force_graph=bool(ns.graph_demo),
@@ -91,10 +91,10 @@ def main(argv: list[str] | None = None) -> None:  # noqa: D401 – imperative m
     )
 
     auto_preview = ns.preview or ns.graph_demo
-    if auto_preview and "graph_path" in out:
-        _preview_graph(str(out["graph_path"]))
+    if auto_preview and out.graph_path:
+        _preview_graph(str(out.graph_path))
 
-    json_out = json.dumps(out, ensure_ascii=False, separators=(",", ":"))
+    json_out = json.dumps(asdict(out), ensure_ascii=False, separators=(",", ":"))
     if ns.out:
         Path(ns.out).write_text(json_out, "utf-8")
         print(f"✔ Twin problem JSON written to {ns.out}")

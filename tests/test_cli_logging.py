@@ -1,6 +1,7 @@
 import logging
 from typing import Any
 from twin_generator import cli
+from twin_generator.pipeline import PipelineState
 
 
 def test_log_level_is_isolated(monkeypatch: Any, capsys: Any) -> None:
@@ -18,10 +19,9 @@ def test_log_level_is_isolated(monkeypatch: Any, capsys: Any) -> None:
 
     monkeypatch.setenv("OPENAI_API_KEY", "test")
 
-    def fake_generate_twin(*args: Any, **kwargs: Any) -> dict[str, Any]:
-        logging.getLogger().debug("root debug")
-        pkg_logger.debug("pkg debug")
-        return {}
+    def fake_generate_twin(*args, **kwargs):
+        logging.getLogger().debug("debug message")
+        return PipelineState()
 
     monkeypatch.setattr(cli, "generate_twin", fake_generate_twin)
     try:
