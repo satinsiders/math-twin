@@ -1,5 +1,6 @@
 import logging
 from twin_generator import cli
+from twin_generator.pipeline import PipelineState
 
 def test_verbose_emits_logs(monkeypatch, capsys):
     root = logging.getLogger()
@@ -11,7 +12,7 @@ def test_verbose_emits_logs(monkeypatch, capsys):
 
     def fake_generate_twin(*args, **kwargs):
         logging.getLogger().debug("debug message")
-        return {}
+        return PipelineState()
 
     monkeypatch.setattr(cli, "generate_twin", fake_generate_twin)
     try:
