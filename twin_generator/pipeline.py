@@ -18,7 +18,7 @@ from .agents import (  # noqa: F401
     SymbolicSolveAgent,
     SymbolicSimplifyAgent,
 )
-from .pipeline_runner import _Graph, _Runner
+from .pipeline_runner import _Graph, _Runner, QA_MAX_RETRIES
 from .pipeline_state import PipelineState
 from .pipeline_steps import (
     _step_answer,
@@ -68,7 +68,7 @@ def generate_twin(
     verbose: bool = False,
 ) -> PipelineState:
     """Generate a twin SAT-style math question given a source problem/solution."""
-    runner = _Runner(_PIPELINE, verbose=verbose)
+    runner = _Runner(_PIPELINE, verbose=verbose, qa_max_retries=QA_MAX_RETRIES)
     state = PipelineState(
         problem_text=problem_text,
         solution=solution_text,
