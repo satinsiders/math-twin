@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 from typing import Any
+import json
 
 import sys
 from pathlib import Path
@@ -258,6 +259,62 @@ def test_step_operations_rejects_invalid_params(monkeypatch: pytest.MonkeyPatch)
     state = PipelineState(template={"operations": [1]}, params={})
     out = pipeline._step_operations(state)
     assert out.error == "OperationsAgent produced non-numeric params: x='oops'"
+
+
+def test_step_operations_trims_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, str] = {}
+
+    def mock_run_sync(agent: Any, input: Any, tools: Any | None = None) -> SimpleNamespace:
+        assert agent.name == "OperationsAgent"
+        captured["payload"] = input
+        return SimpleNamespace(final_output="{}")
+
+    monkeypatch.setattr(pipeline.AgentsRunner, "run_sync", mock_run_sync)
+
+    ops = [{"expr": "1", "output": "x"}]
+    state = PipelineState(
+        template={"operations": ops},
+        params={"a": 1},
+        parsed={"keep": "no"},
+    )
+    pipeline._step_operations(state)
+    sent = json.loads(captured["payload"])
+    assert set(sent["data"].keys()) == {"template", "params"}
+
+
+def test_step_operations_includes_referenced_fields(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, str] = {}
+
+    def mock_run_sync(agent: Any, input: Any, tools: Any | None = None) -> SimpleNamespace:
+        assert agent.name == "OperationsAgent"
+        captured["payload"] = input
+        return SimpleNamespace(final_output="{}")
+
+    monkeypatch.setattr(pipeline.AgentsRunner, "run_sync", mock_run_sync)
+
+    ops = [{"expr": "1", "output": "x", "input": "symbolic_solution"}]
+    state = PipelineState(
+        template={"operations": ops},
+        params={},
+        symbolic_solution="sol",
+    )
+    pipeline._step_operations(state)
+    sent = json.loads(captured["payload"])
+    assert sent["data"].get("symbolic_solution") == "sol"
+    assert set(sent["data"].keys()) == {"template", "params", "symbolic_solution"}
+
+
+def test_step_operations_ignores_unexpected_outputs(monkeypatch: pytest.MonkeyPatch) -> None:
+    def mock_run_sync(agent: Any, input: Any, tools: Any | None = None) -> SimpleNamespace:
+        assert agent.name == "OperationsAgent"
+        return SimpleNamespace(final_output='{"foo": 1, "junk": 2}')
+
+    monkeypatch.setattr(pipeline.AgentsRunner, "run_sync", mock_run_sync)
+
+    ops = [{"expr": "1", "output": "foo"}]
+    state = PipelineState(template={"operations": ops}, params={})
+    out = pipeline._step_operations(state)
+    assert out.extras == {"foo": 1}
 
 
 @pytest.mark.parametrize("always_fail", [False, True])
