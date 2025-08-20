@@ -215,23 +215,20 @@ def _step_visual(state: PipelineState) -> PipelineState:
                 normalized.append(pt)
         spec["points"] = normalized
 
+    spec: Any = None
     vtype = visual.get("type")
-    if vtype == "graph":
-        spec = visual.get("data", {}) or C.DEFAULT_GRAPH_SPEC
+    if force:
+        spec = user_spec or visual.get("data") or C.DEFAULT_GRAPH_SPEC
+    elif vtype == "graph":
+        spec = visual.get("data") or user_spec or C.DEFAULT_GRAPH_SPEC
+
+    if spec is not None:
         if isinstance(spec, dict):
+            if force and not spec.get("points"):
+                spec["points"] = C.DEFAULT_GRAPH_SPEC.get("points", [])
             _normalize_graph_points(cast(dict[str, Any], spec))
         try:
             state.graph_path = _render_graph(json.dumps(spec))
-        except Exception as exc:
-            state.error = f"Invalid graph spec: {exc}"
-        return state
-
-    if force:
-        gspec = user_spec or C.DEFAULT_GRAPH_SPEC
-        if isinstance(gspec, dict):
-            _normalize_graph_points(cast(dict[str, Any], gspec))
-        try:
-            state.graph_path = _render_graph(json.dumps(gspec))
         except Exception as exc:
             state.error = f"Invalid graph spec: {exc}"
         return state
