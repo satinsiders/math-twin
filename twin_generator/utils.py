@@ -44,7 +44,14 @@ def _extract_json_block(text: str) -> str:
 def _repair_json(text: str) -> str:
     """Attempt light‑weight JSON repairs and return the adjusted string."""
     repaired = text
-    repaired = re.sub(r"(?<!\\)'", '"', repaired)
+    # Replace only single quotes that act as string delimiters, leaving apostrophes
+    # inside strings intact. This pattern mirrors typical JSON token boundaries and
+    # avoids overzealous replacements.
+    repaired = re.sub(
+        r"(?<![\\w])'([^'\\]*(?:\\.[^'\\]*)*)'",
+        r'"\1"',
+        repaired,
+    )
     # Strip both line (`//`) and block (`/* */`) comments
     repaired = re.sub(r"//.*?(?=\n|$)", "", repaired)
     repaired = re.sub(r"/\*.*?\*/", "", repaired, flags=re.DOTALL)
