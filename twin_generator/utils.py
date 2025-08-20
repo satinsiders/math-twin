@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import os
 import re
-from typing import Any, Callable, cast
+from typing import Any, Callable
 
 try:  # pragma: no cover - optional dependency
     import json5  # type: ignore
@@ -32,10 +32,10 @@ def get_final_output(res: Any) -> str:  # noqa: ANN401 – generic return
 
 def _extract_json_block(text: str) -> str:
     """Return the most likely JSON substring from *text*."""
-    fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
+    fenced = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", text, re.DOTALL)
     if fenced:
         return fenced.group(1)
-    bracketed = re.search(r"\{[\s\S]*\}", text)
+    bracketed = re.search(r"(\{[\s\S]*\}|\[[\s\S]*\])", text)
     if bracketed:
         return bracketed.group(0)
     return text
@@ -76,7 +76,7 @@ def _parsers() -> list[Callable[[str], Any]]:
     return parsers
 
 
-def safe_json(text: str) -> dict[str, Any]:
+def safe_json(text: str) -> Any:
     """Best‑effort JSON loader with tolerant parsing and repair attempts."""
     text = text.strip()
     if not text:
@@ -87,14 +87,14 @@ def safe_json(text: str) -> dict[str, Any]:
 
     for parser in _parsers():
         try:
-            return cast(dict[str, Any], parser(text))
+            return parser(text)
         except Exception:
             pass
 
     repaired = _repair_json(text)
     for parser in _parsers():
         try:
-            return cast(dict[str, Any], parser(repaired))
+            return parser(repaired)
         except Exception:
             pass
 

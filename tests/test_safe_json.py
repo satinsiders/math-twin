@@ -35,6 +35,11 @@ def test_safe_json_apostrophes_inside_strings() -> None:
     assert out == {"text": "it's great"}
 
 
+def test_safe_json_top_level_array() -> None:
+    out = safe_json("[{'a': 1}, {'b': 2}]")
+    assert out == [{"a": 1}, {"b": 2}]
+
+
 def test_safe_json_error_message() -> None:
     with pytest.raises(ValueError) as exc:
         safe_json("not json")

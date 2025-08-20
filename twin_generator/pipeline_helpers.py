@@ -51,7 +51,12 @@ def invoke_agent(
     expect_json: bool = True,
     max_retries: int = _JSON_MAX_RETRIES,
 ) -> tuple[Any | None, str | None]:
-    """Run an agent and parse its output."""
+    """Run an agent and parse its output.
+
+    When ``expect_json`` is true the return value may be any JSON-serializable
+    structure (object, array, primitive). The second tuple element is an error
+    message if parsing ultimately fails.
+    """
     agent_name = getattr(agent, "name", getattr(agent, "__name__", str(agent)))
     attempts = 0
     while True:
@@ -65,7 +70,8 @@ def invoke_agent(
             return out, None
 
         try:
-            return safe_json(out), None
+            parsed: Any = safe_json(out)
+            return parsed, None
         except ValueError as exc:
             attempts += 1
             if attempts >= max_retries:
