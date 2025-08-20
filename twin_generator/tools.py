@@ -75,9 +75,30 @@ def _render_graph(spec_json: str) -> str:
     """Render a graph to a **PNG file** and return the file path (string)."""
     import matplotlib.pyplot as plt  # type: ignore
     spec = json.loads(spec_json)
-    points: list[list[float]] = spec.get("points", [])
+    raw_points: list[Any] = spec.get("points", [])
     style: str = spec.get("style", "line")
     title: str | None = spec.get("title")
+
+    # Validate and normalize points
+    points: list[tuple[float, float]] = []
+    for idx, pt in enumerate(raw_points):
+        if not isinstance(pt, (list, tuple)):
+            raise ValueError(
+                f"Point {idx} invalid: expected [x, y] format, got {pt!r}"
+            )
+        if len(pt) < 2:
+            raise ValueError(
+                f"Point {idx} invalid: expected [x, y] format, got {pt!r}"
+            )
+        x, y = pt[:2]
+        try:
+            x_f = float(x)
+            y_f = float(y)
+        except (TypeError, ValueError):
+            raise ValueError(
+                f"Point {idx} invalid: expected [x, y] format, got {pt!r}"
+            )
+        points.append((x_f, y_f))
 
     fig, ax = plt.subplots(figsize=(6, 6))
 
