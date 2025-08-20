@@ -30,6 +30,11 @@ def test_safe_json_with_comments() -> None:
     assert out == {"a": 1, "b": 2}
 
 
+def test_safe_json_apostrophes_inside_strings() -> None:
+    out = safe_json("{'text': \"it's great\"}")
+    assert out == {"text": "it's great"}
+
+
 def test_safe_json_error_message() -> None:
     with pytest.raises(ValueError) as exc:
         safe_json("not json")
