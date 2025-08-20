@@ -205,7 +205,10 @@ def _step_visual(state: PipelineState) -> PipelineState:
             ):
                 x = pt.get("X", pt.get("x"))
                 y = pt.get("Y", pt.get("y"))
-                normalized.append([float(x), float(y)])
+                if x is None or y is None:
+                    normalized.append(pt)
+                else:
+                    normalized.append([float(x), float(y)])
             else:
                 normalized.append(pt)
         spec["points"] = normalized
