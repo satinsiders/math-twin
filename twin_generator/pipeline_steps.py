@@ -197,12 +197,18 @@ def _step_visual(state: PipelineState) -> PipelineState:
     vtype = visual.get("type")
     if vtype == "graph":
         spec = visual.get("data", {}) or C.DEFAULT_GRAPH_SPEC
-        state.graph_path = _render_graph(json.dumps(spec))
+        try:
+            state.graph_path = _render_graph(json.dumps(spec))
+        except Exception as exc:
+            state.error = f"Invalid graph spec: {exc}"
         return state
 
     if force:
         gspec = user_spec or C.DEFAULT_GRAPH_SPEC
-        state.graph_path = _render_graph(json.dumps(gspec))
+        try:
+            state.graph_path = _render_graph(json.dumps(gspec))
+        except Exception as exc:
+            state.error = f"Invalid graph spec: {exc}"
         return state
 
     if vtype == "table":
