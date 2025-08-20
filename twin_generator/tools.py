@@ -54,7 +54,8 @@ def _select_matplotlib_backend() -> None:
     if backend in {"agg", "tkagg"}:  # already configured
         return
 
-    prefer_tk = bool(os.environ.get("DISPLAY")) or os.environ.get("MPLBACKEND") == "TkAgg"
+    env_backend = os.environ.get("MPLBACKEND", "").lower()
+    prefer_tk = bool(os.environ.get("DISPLAY")) or env_backend == "tkagg"
     if prefer_tk:
         try:
             matplotlib.use("TkAgg")

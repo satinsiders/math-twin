@@ -2,6 +2,7 @@ import json
 import importlib
 from pathlib import Path
 import sys
+from typing import Any
 
 import pytest
 
@@ -11,7 +12,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 
-def test_render_graph_headless_uses_agg(monkeypatch):
+def test_render_graph_headless_uses_agg(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("DISPLAY", raising=False)
     monkeypatch.delenv("MPLBACKEND", raising=False)
 
@@ -27,14 +28,14 @@ def test_render_graph_headless_uses_agg(monkeypatch):
         Path(path).unlink(missing_ok=True)
 
 
-def test_missing_gui_backend_warns(monkeypatch):
-    monkeypatch.setenv("MPLBACKEND", "TkAgg")
+def test_missing_gui_backend_warns(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MPLBACKEND", "tkagg")
     monkeypatch.delenv("DISPLAY", raising=False)
 
     import matplotlib
     original_use = matplotlib.use
 
-    def fail_use(backend, *args, **kwargs):
+    def fail_use(backend: str, *args: Any, **kwargs: Any) -> Any:
         if backend == "TkAgg":
             raise ImportError("TkAgg not available")
         return original_use(backend, *args, **kwargs)
