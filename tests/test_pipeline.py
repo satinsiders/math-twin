@@ -12,7 +12,7 @@ import pytest
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 import twin_generator.pipeline as pipeline  # noqa: E402
-from twin_generator.pipeline import PipelineState  # noqa: E402
+from twin_generator.pipeline_state import PipelineState  # noqa: E402
 
 
 def test_generate_twin_success(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -268,6 +268,22 @@ def test_step_sample_rejects_invalid_params(monkeypatch: pytest.MonkeyPatch) -> 
     state = PipelineState(template={})
     out = pipeline._step_sample(state)
     assert out.error == "SampleAgent produced non-numeric params: x='oops'"
+
+
+def test_step_sample_warns_on_partial_invalid(monkeypatch: pytest.MonkeyPatch) -> None:
+    def mock_run_sync(agent: Any, input: Any, tools: Any | None = None) -> SimpleNamespace:
+        assert agent.name == "SampleAgent"
+        return SimpleNamespace(final_output='{"x": 1, "y": "oops"}')
+
+    monkeypatch.setattr(pipeline.AgentsRunner, "run_sync", mock_run_sync)
+
+    state = PipelineState(template={})
+    out = pipeline._step_sample(state)
+    assert out.error is None
+    assert out.params is not None
+    assert int(out.params["x"]) == 1
+    assert out.extras is not None
+    assert out.extras["warning"] == "SampleAgent produced non-numeric params: y='oops'"
 
 
 def test_step_operations_rejects_invalid_params(monkeypatch: pytest.MonkeyPatch) -> None:
