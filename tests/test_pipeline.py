@@ -258,28 +258,38 @@ def test_step_visual_handles_non_dict() -> None:
     assert out.template == state.template
 
 
-def test_step_sample_rejects_invalid_params(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_step_sample_sanitizes_params(monkeypatch: pytest.MonkeyPatch) -> None:
     def mock_run_sync(agent: Any, input: Any, tools: Any | None = None) -> SimpleNamespace:
         assert agent.name == "SampleAgent"
-        return SimpleNamespace(final_output='{"x": "oops"}')
+        return SimpleNamespace(final_output='{"x": "oops", "y": 2}')
 
     monkeypatch.setattr(pipeline.AgentsRunner, "run_sync", mock_run_sync)
 
     state = PipelineState(template={})
     out = pipeline._step_sample(state)
-    assert out.error == "SampleAgent produced non-numeric params: x='oops'"
+    assert out.error is None
+    assert out.params == {"y": 2}
 
 
-def test_step_operations_rejects_invalid_params(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_step_operations_sanitizes_params(monkeypatch: pytest.MonkeyPatch) -> None:
     def mock_run_sync(agent: Any, input: Any, tools: Any | None = None) -> SimpleNamespace:
         assert agent.name == "OperationsAgent"
-        return SimpleNamespace(final_output='{"params": {"x": "oops"}}')
+        return SimpleNamespace(final_output='{"params": {"x": "oops", "y": 2}}')
 
     monkeypatch.setattr(pipeline.AgentsRunner, "run_sync", mock_run_sync)
 
     state = PipelineState(template={"operations": [1]}, params={})
     out = pipeline._step_operations(state)
-    assert out.error == "OperationsAgent produced non-numeric params: x='oops'"
+    assert out.error is None
+    assert out.params == {"y": 2}
+
+
+def test_sanitize_params_ignores_strings() -> None:
+    from twin_generator.tools import _sanitize_params
+
+    cleaned, skipped = _sanitize_params({"a": 1, "b": "bad", "c": 2})
+    assert cleaned == {"a": 1, "c": 2}
+    assert set(skipped) == {"b"}
 
 
 def test_step_operations_trims_payload(monkeypatch: pytest.MonkeyPatch) -> None:

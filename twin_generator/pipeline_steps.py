@@ -77,12 +77,8 @@ def _step_sample(state: PipelineState) -> PipelineState:
     if not isinstance(out, dict):
         state.error = "SampleAgent produced non-dict params"
         return state
-    _, skipped = _sanitize_params(out)
-    if skipped:
-        bad = ", ".join(f"{k}={out[k]!r}" for k in skipped)
-        state.error = f"SampleAgent produced non-numeric params: {bad}"
-        return state
-    state.params = out
+    sanitized, _ = _sanitize_params(out)
+    state.params = {k: out[k] for k in sanitized}
     return state
 
 
@@ -146,12 +142,8 @@ def _step_operations(state: PipelineState) -> PipelineState:
     if isinstance(out, dict):
         params_out = out.get("params")
         if isinstance(params_out, dict):
-            _, skipped = _sanitize_params(params_out)
-            if skipped:
-                bad = ", ".join(f"{k}={params_out[k]!r}" for k in skipped)
-                state.error = f"OperationsAgent produced non-numeric params: {bad}"
-                return state
-            state.params = params_out
+            sanitized, _ = _sanitize_params(params_out)
+            state.params = {k: params_out[k] for k in sanitized}
         expected_outputs: set[str] = set()
         for op in ops:
             if isinstance(op, dict):
