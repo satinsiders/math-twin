@@ -143,35 +143,37 @@ def _step_operations(state: PipelineState) -> PipelineState:
     if err:
         state.error = err
         return state
-    if isinstance(out, dict):
-        params_out = out.get("params")
-        if isinstance(params_out, dict):
-            _, skipped = _sanitize_params(params_out)
-            if skipped:
-                bad = ", ".join(f"{k}={params_out[k]!r}" for k in skipped)
-                state.error = f"OperationsAgent produced non-numeric params: {bad}"
-                return state
-            state.params = params_out
-        expected_outputs: set[str] = set()
-        for op in ops:
-            if isinstance(op, dict):
-                out_key = op.get("output")
-                if isinstance(out_key, str):
-                    expected_outputs.add(out_key)
-                else:
-                    out_vals = op.get("outputs")
-                    if isinstance(out_vals, list):
-                        expected_outputs.update(
-                            str(o) for o in out_vals if isinstance(o, str)
-                        )
-
-        for key, value in out.items():
-            if key == "params" or key not in expected_outputs:
-                continue
-            if hasattr(state, key):
-                setattr(state, key, value)
+    if not isinstance(out, dict):
+        state.error = "OperationsAgent produced non-dict output"
+        return state
+    params_out = out.get("params")
+    if isinstance(params_out, dict):
+        _, skipped = _sanitize_params(params_out)
+        if skipped:
+            bad = ", ".join(f"{k}={params_out[k]!r}" for k in skipped)
+            state.error = f"OperationsAgent produced non-numeric params: {bad}"
+            return state
+        state.params = params_out
+    expected_outputs: set[str] = set()
+    for op in ops:
+        if isinstance(op, dict):
+            out_key = op.get("output")
+            if isinstance(out_key, str):
+                expected_outputs.add(out_key)
             else:
-                state.extras[key] = value
+                out_vals = op.get("outputs")
+                if isinstance(out_vals, list):
+                    expected_outputs.update(
+                        str(o) for o in out_vals if isinstance(o, str)
+                    )
+
+    for key, value in out.items():
+        if key == "params" or key not in expected_outputs:
+            continue
+        if hasattr(state, key):
+            setattr(state, key, value)
+        else:
+            state.extras[key] = value
     return state
 
 
