@@ -9,7 +9,7 @@ ParserAgent = Agent(
         "relations, constraints, any visuals, and the answer format, ensuring coverage through "
         "extremely advanced math operations."
     ),
-    model="gpt-5-mini",
+    model="gpt-5-nano",
 )
 
 ConceptAgent = Agent(
@@ -18,7 +18,7 @@ ConceptAgent = Agent(
         "From the parsed JSON, identify the key concept(s) and outline the canonical "
         "solution path in ordered steps, ensuring coverage through extremely advanced math operations."
     ),
-    model="gpt-5-mini",
+    model="gpt-5-nano",
 )
 
 # TemplateAgent expected schema:
@@ -45,7 +45,7 @@ TemplateAgent = Agent(
         "double-quoted keys/values and no trailing text, ensuring coverage through "
         "extremely advanced math operations."
     ),
-    model="gpt-5-mini",
+    model="gpt-5-nano",
 )
 
 SampleAgent = Agent(
@@ -59,7 +59,7 @@ SampleAgent = Agent(
         "Each parameter value must be a plain number or numeric expression "
         "compatible with SymPy, ensuring coverage through extremely advanced math operations."
     ),
-    model="gpt-5-mini",
+    model="gpt-5-nano",
 )
 
 StemChoiceAgent = Agent(
@@ -70,7 +70,7 @@ StemChoiceAgent = Agent(
         "with double-quoted keys/values and no trailing text containing keys: "
         "twin_stem, choices[], rationale, ensuring coverage through extremely advanced math operations."
     ),
-    model="gpt-5-mini",
+    model="gpt-5-nano",
 )
 
 FormatterAgent = Agent(
@@ -81,7 +81,7 @@ FormatterAgent = Agent(
         "answer_value, rationale, graph_path?, table_html?. Validate internal consistency while "
         "ensuring coverage through extremely advanced math operations."
     ),
-    model="gpt-5-mini",
+    model="gpt-5-nano",
 )
 
 QAAgent = Agent(
@@ -91,7 +91,7 @@ QAAgent = Agent(
         "(double-quoted keys/values with no trailing text), and internal consistency, ensuring coverage through "
         "extremely advanced math operations. Return 'pass' if the output is sound, otherwise return a brief reason."
     ),
-    model="gpt-5-mini",
+    model="gpt-5-nano",
 )
 
 SymbolicSolveAgent = Agent(
@@ -100,7 +100,7 @@ SymbolicSolveAgent = Agent(
         "Handle heavy symbolic equation solving tasks with precision, ensuring coverage through "
         "extremely advanced math operations."
     ),
-    model="gpt-5-mini",
+    model="gpt-5-nano",
 )
 
 SymbolicSimplifyAgent = Agent(
@@ -109,7 +109,7 @@ SymbolicSimplifyAgent = Agent(
         "Perform deep symbolic simplification and manipulation while ensuring coverage through "
         "extremely advanced math operations."
     ),
-    model="gpt-5-mini",
+    model="gpt-5-nano",
 )
 
 OperationsAgent = Agent(
@@ -119,7 +119,7 @@ OperationsAgent = Agent(
         "to compute intermediate results. Return only a single JSON object with double-quoted "
         "keys/values and no trailing text containing any newly derived fields."
     ),
-    model="gpt-5-mini",
+    model="gpt-5-nano",
 )
 
 __all__ = [
