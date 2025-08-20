@@ -77,12 +77,22 @@ def _step_sample(state: PipelineState) -> PipelineState:
     if not isinstance(out, dict):
         state.error = "SampleAgent produced non-dict params"
         return state
-    _, skipped = _sanitize_params(out)
+    cleaned, skipped = _sanitize_params(out)
+    if not cleaned:
+        if skipped:
+            bad = ", ".join(f"{k}={out[k]!r}" for k in skipped)
+            state.error = f"SampleAgent produced non-numeric params: {bad}"
+            return state
+        state.params = {}
+        return state
+    numeric_params: dict[str, Any] = {}
+    for key, val in cleaned.items():
+        fval = float(val)
+        numeric_params[key] = int(fval) if fval.is_integer() else fval
+    state.params = numeric_params
     if skipped:
         bad = ", ".join(f"{k}={out[k]!r}" for k in skipped)
-        state.error = f"SampleAgent produced non-numeric params: {bad}"
-        return state
-    state.params = out
+        state.extras["warning"] = f"SampleAgent produced non-numeric params: {bad}"
     return state
 
 
