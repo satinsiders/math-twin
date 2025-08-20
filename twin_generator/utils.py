@@ -8,6 +8,7 @@ import re
 from types import ModuleType
 from typing import Any, Callable
 
+_json5: ModuleType | None
 try:  # pragma: no cover - optional dependency
     import json5 as _json5  # type: ignore
 except Exception:  # pragma: no cover - fall back to stdlib
