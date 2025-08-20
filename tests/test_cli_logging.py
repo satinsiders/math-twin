@@ -21,6 +21,7 @@ def test_log_level_is_isolated(monkeypatch: Any, capsys: Any) -> None:
 
     def fake_generate_twin(*args, **kwargs):
         logging.getLogger().debug("debug message")
+        logging.getLogger("twin_generator").debug("pkg debug")
         return PipelineState()
 
     monkeypatch.setattr(cli, "generate_twin", fake_generate_twin)

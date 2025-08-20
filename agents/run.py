@@ -134,7 +134,12 @@ class Runner:
                 func = tool.get("_func")
                 if not callable(func):
                     raise RuntimeError(f"tool {name} is missing callable")
-                args = json.loads(getattr(call.function, "arguments", "{}"))
+                try:
+                    args = json.loads(getattr(call.function, "arguments", "{}"))
+                except json.JSONDecodeError as e:
+                    raise RuntimeError(
+                        f"tool {name} provided invalid JSON arguments: {e}"
+                    ) from e
                 result = func(**args)
                 outputs.append({"tool_call_id": call.id, "output": str(result)})
             resp = client.responses.submit_tool_outputs(

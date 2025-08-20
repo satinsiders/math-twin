@@ -84,3 +84,31 @@ def test_execute_tool_calls_aborts_when_status_never_resolves() -> None:
 
     assert "requires_action" in str(excinfo.value)
     assert client.responses.count == 10
+
+
+def test_execute_tool_calls_raises_on_invalid_json() -> None:
+    def noop() -> None:
+        pass
+
+    call = SimpleNamespace(
+        id="1",
+        function=SimpleNamespace(name="noop", arguments="{"),
+    )
+    resp = SimpleNamespace(
+        status="requires_action",
+        required_action=SimpleNamespace(
+            submit_tool_outputs=SimpleNamespace(tool_calls=[call])
+        ),
+        id="resp1",
+    )
+
+    client = SimpleNamespace(
+        responses=SimpleNamespace(
+            submit_tool_outputs=lambda *args, **kwargs: resp
+        )
+    )
+
+    with pytest.raises(RuntimeError) as excinfo:
+        Runner._execute_tool_calls(client, resp, {"noop": {"_func": noop}})
+
+    assert "tool noop provided invalid JSON arguments" in str(excinfo.value)
