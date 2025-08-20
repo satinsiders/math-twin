@@ -331,6 +331,21 @@ def test_step_visual_force_invalid_spec_sets_error() -> None:
     assert out.graph_path is None
 
 
+@pytest.mark.parametrize(
+    "points",
+    [
+        [[0, 0], [1, 1]],
+        [{"X": 0, "Y": 0}, {"x": 1, "y": 1}],
+    ],
+)
+def test_step_visual_accepts_point_formats(points: list[Any]) -> None:
+    state = PipelineState(template={"visual": {"type": "graph", "data": {"points": points}}})
+    out = pipeline._step_visual(state)
+    assert out.error is None
+    assert out.graph_path and Path(out.graph_path).is_file()
+    Path(out.graph_path).unlink(missing_ok=True)
+
+
 def test_step_sample_rejects_invalid_params(monkeypatch: pytest.MonkeyPatch) -> None:
     def mock_run_sync(agent: Any, input: Any, tools: Any | None = None) -> SimpleNamespace:
         assert agent.name == "SampleAgent"

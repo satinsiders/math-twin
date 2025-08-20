@@ -194,9 +194,27 @@ def _step_visual(state: PipelineState) -> PipelineState:
     force = bool(state.force_graph)
     user_spec = state.graph_spec
 
+    def _normalize_graph_points(spec: dict[str, Any]) -> None:
+        points = spec.get("points")
+        if not isinstance(points, list):
+            return
+        normalized: list[Any] = []
+        for pt in points:
+            if isinstance(pt, dict) and (
+                ("X" in pt and "Y" in pt) or ("x" in pt and "y" in pt)
+            ):
+                x = pt.get("X", pt.get("x"))
+                y = pt.get("Y", pt.get("y"))
+                normalized.append([float(x), float(y)])
+            else:
+                normalized.append(pt)
+        spec["points"] = normalized
+
     vtype = visual.get("type")
     if vtype == "graph":
         spec = visual.get("data", {}) or C.DEFAULT_GRAPH_SPEC
+        if isinstance(spec, dict):
+            _normalize_graph_points(cast(dict[str, Any], spec))
         try:
             state.graph_path = _render_graph(json.dumps(spec))
         except Exception as exc:
@@ -205,6 +223,8 @@ def _step_visual(state: PipelineState) -> PipelineState:
 
     if force:
         gspec = user_spec or C.DEFAULT_GRAPH_SPEC
+        if isinstance(gspec, dict):
+            _normalize_graph_points(cast(dict[str, Any], gspec))
         try:
             state.graph_path = _render_graph(json.dumps(gspec))
         except Exception as exc:
