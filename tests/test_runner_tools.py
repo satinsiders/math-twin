@@ -8,7 +8,9 @@ from typing import Any
 
 import pytest
 
-sys.path.append(str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.modules.pop("agents", None)
+sys.modules.pop("agents.run", None)
 
 from agents.run import Runner  # noqa: E402
 

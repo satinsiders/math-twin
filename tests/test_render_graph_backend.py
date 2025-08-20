@@ -16,7 +16,7 @@ def test_render_graph_headless_uses_agg(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.delenv("DISPLAY", raising=False)
     monkeypatch.delenv("MPLBACKEND", raising=False)
 
-    import twin_generator.tools as tools
+    import twin_generator.tools.graph as tools
     importlib.reload(tools)
 
     path = tools._render_graph(json.dumps({"points": [[0, 0], [1, 1]]}))
@@ -42,7 +42,7 @@ def test_missing_gui_backend_warns(monkeypatch: pytest.MonkeyPatch) -> None:
 
     original_use("pdf")
     monkeypatch.setattr(matplotlib, "use", fail_use)
-    import twin_generator.tools as tools
+    import twin_generator.tools.graph as tools
     with pytest.warns(RuntimeWarning):
         importlib.reload(tools)
 
