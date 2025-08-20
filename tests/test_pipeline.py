@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 import json
 
 import sys
@@ -13,6 +13,7 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 import twin_generator.pipeline as pipeline  # noqa: E402
 from twin_generator.pipeline_state import PipelineState  # noqa: E402
+from twin_generator.constants import GraphSpec  # noqa: E402
 
 
 def test_generate_twin_success(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -309,6 +310,25 @@ def test_step_visual_handles_non_dict() -> None:
     state = PipelineState(template={"visual": "not-a-dict"})
     out = pipeline._step_visual(state)
     assert out.template == state.template
+
+
+def test_step_visual_invalid_graph_spec_sets_error() -> None:
+    state = PipelineState(template={"visual": {"type": "graph", "data": {"points": "oops"}}})
+    out = pipeline._step_visual(state)
+    assert out.error and out.error.startswith("Invalid graph spec:")
+    assert out.graph_path is None
+
+
+def test_step_visual_force_invalid_spec_sets_error() -> None:
+    bad_spec = cast(GraphSpec, {"points": "oops"})
+    state = PipelineState(
+        template={"visual": {"type": "none"}},
+        force_graph=True,
+        graph_spec=bad_spec,
+    )
+    out = pipeline._step_visual(state)
+    assert out.error and out.error.startswith("Invalid graph spec:")
+    assert out.graph_path is None
 
 
 def test_step_sample_rejects_invalid_params(monkeypatch: pytest.MonkeyPatch) -> None:
