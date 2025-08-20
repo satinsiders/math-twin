@@ -5,7 +5,6 @@ import json
 import os
 import re
 
-from types import ModuleType
 from typing import Any, Callable
 
 try:  # pragma: no cover - optional dependency
