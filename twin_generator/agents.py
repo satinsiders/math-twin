@@ -4,10 +4,11 @@ from agents import Agent  # type: ignore
 ParserAgent = Agent(
     name="ParserAgent",
     instructions=(
-        "Take the source problem + solution and return only a single JSON object "
-        "with double-quoted keys/values and no trailing text detailing variables, "
-        "relations, constraints, any visuals, and the answer format, ensuring coverage through "
-        "extremely advanced math operations."
+        "Input: raw problem text followed by its worked solution. Extract every variable, "
+        "relation, constraint, visual requirement, and the expected answer form. Output: exactly "
+        "one JSON object with double-quoted keys/values and no trailing text. The object should "
+        "contain keys such as variables, relations, constraints, visual, and answer_form, providing all "
+        "information needed for downstream steps."
     ),
     model="gpt-5-nano",
 )
@@ -15,8 +16,9 @@ ParserAgent = Agent(
 ConceptAgent = Agent(
     name="ConceptAgent",
     instructions=(
-        "From the parsed JSON, identify the key concept(s) and outline the canonical "
-        "solution path in ordered steps, ensuring coverage through extremely advanced math operations."
+        "Input: JSON produced by ParserAgent. Identify the key mathematical concept(s) and outline "
+        "the canonical solution path in ordered steps. Output: a plain-text string with the concept "
+        "followed by numbered steps. Do not return JSON or extra commentary."
     ),
     model="gpt-5-nano",
 )
@@ -40,10 +42,10 @@ ConceptAgent = Agent(
 TemplateAgent = Agent(
     name="TemplateAgent",
     instructions=(
-        "Replace literals with symbols; provide domains; include a `visual` field "
-        "→ {type: none|graph|table, data: {…}}. Return only a single JSON object with "
-        "double-quoted keys/values and no trailing text, ensuring coverage through "
-        "extremely advanced math operations."
+        "Input: JSON {parsed, concept}. Replace literals with symbolic parameters and supply their "
+        "domains. Include fields: template, domains, answer_expression, operations[], and visual → "
+        "{type: none|graph|table, data:{}}. Output: one JSON object with double-quoted keys/values and "
+        "no trailing text."
     ),
     model="gpt-5-nano",
 )
@@ -51,13 +53,9 @@ TemplateAgent = Agent(
 SampleAgent = Agent(
     name="SampleAgent",
     instructions=(
-        "Given a parameterized math problem template, generate a candidate "
-        "parameter set and compute output. Return only a single JSON object "
-        "with double-quoted keys/values and no trailing text representing the "
-        "parameter mapping. Only include numeric parameter values required by "
-        "the template—no extra commentary, derived objects, or additional fields. "
-        "Each parameter value must be a plain number or numeric expression "
-        "compatible with SymPy, ensuring coverage through extremely advanced math operations."
+        "Input: JSON {template}. Generate a concrete parameter set that satisfies all domain "
+        "constraints. Output: a single JSON object mapping each symbol to a plain number or "
+        "SymPy-compatible numeric expression. Include only required parameters—no extra fields or commentary."
     ),
     model="gpt-5-nano",
 )
@@ -65,10 +63,10 @@ SampleAgent = Agent(
 StemChoiceAgent = Agent(
     name="StemChoiceAgent",
     instructions=(
-        "Using the *parameter template* and the sampled params, draft a **new SAT-style** equation problem "
-        "that tests the same concept but with surface variation. Return only a single JSON object "
-        "with double-quoted keys/values and no trailing text containing keys: "
-        "twin_stem, choices[], rationale, ensuring coverage through extremely advanced math operations."
+        "Input: JSON {template, params, graph_path?, table_html?}. Substitute params into the template and craft a new "
+        "SAT-style question `twin_stem` that tests the same concept. Generate an array `choices` of plausible answers with "
+        "exactly one correct option and provide a brief `rationale` for that choice. Output: one JSON object with "
+        "double-quoted keys/values and no trailing text."
     ),
     model="gpt-5-nano",
 )
@@ -76,10 +74,10 @@ StemChoiceAgent = Agent(
 FormatterAgent = Agent(
     name="FormatterAgent",
     instructions=(
-        "Return only a single minified JSON object with double-quoted keys/values "
-        "and no trailing text containing fields: twin_stem, choices[], answer_index, "
-        "answer_value, rationale, graph_path?, table_html?. Validate internal consistency while "
-        "ensuring coverage through extremely advanced math operations."
+        "Input: JSON {twin_stem, choices, answer_value, rationale, graph_path?, table_html?}. Return a minified JSON object "
+        "containing twin_stem, choices[], answer_index (0-based index of the correct choice), answer_value (matching the "
+        "correct choice), rationale, and optional graph_path/table_html. Ensure answer_index and answer_value align with the "
+        "choices. Output must be a single JSON object with double-quoted keys/values and no trailing text."
     ),
     model="gpt-5-nano",
 )
@@ -87,9 +85,9 @@ FormatterAgent = Agent(
 QAAgent = Agent(
     name="QAAgent",
     instructions=(
-        "Validate the previous step's output for correctness, strict JSON formatting "
-        "(double-quoted keys/values with no trailing text), and internal consistency, ensuring coverage through "
-        "extremely advanced math operations. Return 'pass' if the output is sound, otherwise return a brief reason."
+        "Input: JSON produced by FormatterAgent. Verify strict JSON formatting and internal consistency—fields present, "
+        "answer_index matches answer_value and choices, and any assets are valid. Output the plain string 'pass' if the data is "
+        "sound; otherwise return a brief reason."
     ),
     model="gpt-5-nano",
 )
@@ -127,9 +125,9 @@ SymbolicSimplifyAgent = Agent(
 OperationsAgent = Agent(
     name="OperationsAgent",
     instructions=(
-        "Given the current pipeline data and a list of operations, invoke any provided tools "
-        "to compute intermediate results. Return only a single JSON object with double-quoted "
-        "keys/values and no trailing text containing any newly derived fields."
+        "Input: JSON {data: {...}, operations: [...]}. Execute each operation—invoking tools when needed—to compute "
+        "intermediate results or update parameters. Output: a single JSON object with double-quoted keys/values containing any "
+        "newly derived fields or revised params, with no trailing text or commentary."
     ),
     model="gpt-5-nano",
 )
