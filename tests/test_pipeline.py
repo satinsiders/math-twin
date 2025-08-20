@@ -109,6 +109,59 @@ def test_generate_twin_agent_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     assert out.params is None
 
 
+def test_generate_twin_operations_non_dict(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    call_order = []
+
+    def mock_run_sync(
+        agent: Any, input: Any, tools: Any | None = None
+    ) -> SimpleNamespace:
+        call_order.append(agent.name)
+        name = agent.name
+        if name == "ParserAgent":
+            return SimpleNamespace(final_output='{"parsed": true}')
+        if name == "ConceptAgent":
+            return SimpleNamespace(final_output="concept")
+        if name == "TemplateAgent":
+            return SimpleNamespace(
+                final_output=(
+                    '{"visual": {"type": "none"}, "answer_expression": "x", '
+                    '"operations": [{"expr": "1", "output": "run_agent"}]}'
+                )
+            )
+        if name == "SampleAgent":
+            return SimpleNamespace(final_output='{"x": 1}')
+        if name == "SymbolicSolveAgent":
+            return SimpleNamespace(final_output="sym_solved")
+        if name == "SymbolicSimplifyAgent":
+            return SimpleNamespace(final_output="sym_simplified")
+        if name == "OperationsAgent":
+            return SimpleNamespace(final_output="[]")
+        if name == "QAAgent":
+            return SimpleNamespace(final_output="pass")
+        raise AssertionError("unexpected agent")
+
+    monkeypatch.setattr(pipeline.AgentsRunner, "run_sync", mock_run_sync)
+
+    out = pipeline.generate_twin("p", "s")
+    assert out.error == "OperationsAgent produced non-dict output"
+    assert call_order == [
+        "ParserAgent",
+        "QAAgent",
+        "ConceptAgent",
+        "QAAgent",
+        "TemplateAgent",
+        "QAAgent",
+        "SampleAgent",
+        "QAAgent",
+        "SymbolicSolveAgent",
+        "SymbolicSimplifyAgent",
+        "QAAgent",
+        "OperationsAgent",
+    ]
+
+
 def test_generate_twin_parser_invalid_json(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
