@@ -54,7 +54,10 @@ SampleAgent = Agent(
         "Given a parameterized math problem template, generate a candidate "
         "parameter set and compute output. Return only a single JSON object "
         "with double-quoted keys/values and no trailing text representing the "
-        "parameter mapping, ensuring coverage through extremely advanced math operations."
+        "parameter mapping. Only include numeric parameter values required by "
+        "the template—no extra commentary, derived objects, or additional fields. "
+        "Each parameter value must be a plain number or numeric expression "
+        "compatible with SymPy, ensuring coverage through extremely advanced math operations."
     ),
     model="gpt-5-mini",
 )
