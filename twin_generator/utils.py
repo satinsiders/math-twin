@@ -4,12 +4,15 @@ from __future__ import annotations
 import json
 import os
 import re
-from typing import Any, Callable
+
+from types import ModuleType
+from typing import Any, Callable, cast
 
 try:  # pragma: no cover - optional dependency
-    import json5  # type: ignore
+    import json5 as _json5  # type: ignore
 except Exception:  # pragma: no cover - fall back to stdlib
-    json5 = None
+    _json5 = None
+json5: ModuleType | None = _json5
 
 # ---------------------------------------------------------------------------
 # Generic agent output handling
