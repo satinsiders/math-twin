@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, cast
+from typing import Any, SupportsFloat, cast
 
 from . import constants as C
 from .agents import (
@@ -87,7 +87,7 @@ def _step_sample(state: PipelineState) -> PipelineState:
         return state
     numeric_params: dict[str, Any] = {}
     for key, val in cleaned.items():
-        fval = float(val)
+        fval = float(cast(SupportsFloat, val))
         numeric_params[key] = int(fval) if fval.is_integer() else fval
     state.params = numeric_params
     if skipped:
