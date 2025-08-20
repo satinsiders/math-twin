@@ -6,7 +6,7 @@ import os
 import re
 
 from types import ModuleType
-from typing import Any, Callable, cast
+from typing import Any, Callable
 
 try:  # pragma: no cover - optional dependency
     import json5 as _json5  # type: ignore
