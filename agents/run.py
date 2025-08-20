@@ -102,9 +102,13 @@ class Runner:
                 tool_map[name] = t
                 cached = cls._SANITIZED_CACHE.get(name)
                 if cached is None:
-                    cached = {k: v for k, v in t.items() if not k.startswith("_")}
-                    cls._SANITIZED_CACHE[name] = cached
-                sanitized.append(cached)
+                    sanitized_tool = {
+                        k: v for k, v in t.items() if not k.startswith("_")
+                    }
+                    cls._SANITIZED_CACHE[name] = sanitized_tool.copy()
+                    sanitized.append(sanitized_tool.copy())
+                else:
+                    sanitized.append(cached.copy())
             else:
                 sanitized.append({k: v for k, v in t.items() if not k.startswith("_")})
         return sanitized, tool_map

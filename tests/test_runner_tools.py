@@ -25,7 +25,8 @@ def test_sanitize_tools_caches_by_name() -> None:
     sanitized1, _ = Runner._sanitize_tools([tool1])
     sanitized2, _ = Runner._sanitize_tools([tool2])
 
-    assert sanitized1[0] is sanitized2[0]
+    assert sanitized1[0] == sanitized2[0]
+    assert sanitized1[0] is not sanitized2[0]
 
 
 def test_execute_tool_calls_runs_tools_and_returns_response() -> None:
