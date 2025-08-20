@@ -22,7 +22,9 @@ from .pipeline_helpers import (
     _TEMPLATE_MAX_RETRIES,
     invoke_agent,
 )
-from .tools import _calc_answer, _make_html_table, _render_graph, _sanitize_params
+from .tools.calc import _calc_answer, _sanitize_params
+from .tools.graph import _render_graph
+from .tools.html_table import _make_html_table
 from .utils import coerce_answers, validate_output
 from .pipeline_state import PipelineState
 

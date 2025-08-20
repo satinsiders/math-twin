@@ -8,8 +8,8 @@ import pytest
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from twin_generator.tools import _calc_answer  # noqa: E402
-import twin_generator.tools as tools  # noqa: E402
+from twin_generator.tools.calc import _calc_answer  # noqa: E402
+import twin_generator.tools.calc as tools  # noqa: E402
 
 
 def test_calc_answer_diff() -> None:

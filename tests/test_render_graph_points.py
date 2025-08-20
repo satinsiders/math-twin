@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-import twin_generator.tools as tools
+import twin_generator.tools.graph as tools
 
 
 def test_render_graph_raises_for_insufficient_point_entries() -> None:

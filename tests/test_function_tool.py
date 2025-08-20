@@ -5,13 +5,20 @@ from pathlib import Path
 from typing import Optional, Union
 from unittest.mock import patch
 
-sys.path.append(str(Path(__file__).resolve().parents[1]))
-
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.modules.pop("agents", None)
+sys.modules.pop("agents.tool", None)
 from agents.tool import _INTROSPECTION_CACHE, function_tool  # noqa: E402
 
 
-def test_annotation_to_type_handles_complex_signatures():
-    def f(a: int, b: Optional[float], c: list[str], d: Union[int, float], e: Union[int, str]):
+def test_annotation_to_type_handles_complex_signatures() -> None:
+    def f(
+        a: int,
+        b: Optional[float],
+        c: list[str],
+        d: Union[int, float],
+        e: Union[int, str],
+    ) -> None:
         pass
 
     tool = function_tool(f)
@@ -23,7 +30,7 @@ def test_annotation_to_type_handles_complex_signatures():
     assert props["e"]["type"] == "string"
 
 
-def test_function_tool_caches_introspection():
+def test_function_tool_caches_introspection() -> None:
     def g(x: int) -> int:
         return x
 
