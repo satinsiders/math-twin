@@ -90,7 +90,10 @@ def _calc_answer(expression: str, params_json: str) -> Any:  # noqa: ANN401 â€“Â
     try:
         expr = parse_expr(expr_str, local_dict=local_ops, transformations=transformations)
     except Exception:
-        expr = parse_expr(expr_str, transformations=transformations)
+        try:
+            expr = parse_expr(expr_str, transformations=transformations)
+        except Exception as exc:
+            raise ValueError(error_msg) from exc
 
     if isinstance(expr, Relational):
         raise ValueError(error_msg)

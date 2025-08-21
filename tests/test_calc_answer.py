@@ -46,7 +46,11 @@ def test_calc_answer_timeout_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
         raise TimeoutError
 
     monkeypatch.setattr(tools, "_run_with_timeout", _timeout)
-    assert tools._calc_answer("diff(x**2, x)", '{}') == "Derivative(x**2, x)"
+    with pytest.raises(ValueError) as excinfo:
+        tools._calc_answer("diff(x**2, x)", '{}')
+    msg = str(excinfo.value)
+    assert "diff(x**2, x)" in msg
+    assert "use '*' for multiplication" in msg
 
 
 def test_calc_answer_implicit_multiplication() -> None:
@@ -55,3 +59,15 @@ def test_calc_answer_implicit_multiplication() -> None:
 
 def test_calc_answer_equation_rhs() -> None:
     assert _calc_answer("y = m x", '{"m": 3, "x": 4}') == 12
+
+
+def test_calc_answer_equation_with_addition() -> None:
+    assert _calc_answer("y = m x + b", '{"m": 2, "x": 3, "b": 5}') == 11
+
+
+def test_calc_answer_malformed_expression() -> None:
+    with pytest.raises(ValueError) as excinfo:
+        _calc_answer("y = m x +", '{"m": 2, "x": 3}')
+    msg = str(excinfo.value)
+    assert "Could not evaluate expression 'y = m x +'" in msg
+    assert "use '*' for multiplication" in msg
