@@ -8,6 +8,11 @@ from agents.run import Runner as AgentsRunner  # type: ignore
 from .tools.calc import calc_answer_tool
 from .tools.graph import render_graph_tool
 from .tools.html_table import make_html_table_tool
+from .tools.qa_tools import (
+    check_asset_tool,
+    sanitize_params_tool,
+    validate_output_tool,
+)
 from .utils import get_final_output, safe_json
 
 __all__ = [
@@ -23,7 +28,14 @@ __all__ = [
 # Default tools available to most agents. TemplateAgent is intentionally given a
 # more restrictive list that excludes ``render_graph_tool`` and
 # ``make_html_table_tool``.
-_TOOLS = [calc_answer_tool, render_graph_tool, make_html_table_tool]
+_TOOLS = [
+    calc_answer_tool,
+    render_graph_tool,
+    make_html_table_tool,
+    sanitize_params_tool,
+    validate_output_tool,
+    check_asset_tool,
+]
 _TEMPLATE_TOOLS = [calc_answer_tool]
 _TEMPLATE_MAX_RETRIES = 3
 _JSON_MAX_RETRIES = 3
