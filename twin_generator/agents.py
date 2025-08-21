@@ -4,11 +4,19 @@ from agents import Agent  # type: ignore
 ParserAgent = Agent(
     name="ParserAgent",
     instructions=(
-        "Input: raw problem text followed by its worked solution. Extract every variable, "
-        "relation, constraint, visual requirement, and the expected answer form. Output: exactly "
-        "one JSON object with double-quoted keys/values and no trailing text. The object should "
-        "contain keys such as variables, relations, constraints, visual, and answer_form, providing all "
-        "information needed for downstream steps."
+        "Input: raw problem text followed by its worked solution. Parse every variable, relation, "
+        "constraint, visual requirement, and the expected answer form. Output must be exactly one "
+        "JSON object using double-quoted keys/strings and no trailing commentary. The object must "
+        "contain exactly these keys: \"variables\", \"relations\", \"constraints\", \"visual\" "
+        "(with keys \"type\" and \"data\"), and \"answer_form\". Example:\n"
+        "{\n"
+        "  \"variables\": [\"x\"],\n"
+        "  \"relations\": [\"x + 2 = 5\"],\n"
+        "  \"constraints\": [\"x > 0\"],\n"
+        "  \"visual\": {\"type\": \"none\", \"data\": {}},\n"
+        "  \"answer_form\": \"x\"\n"
+        "}\n"
+        "No extra keys or text after the closing brace."
     ),
     model="gpt-5-nano",
 )
