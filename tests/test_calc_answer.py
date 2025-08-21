@@ -34,8 +34,11 @@ def test_calc_answer_nested() -> None:
 
 
 def test_calc_answer_skips_bad_params() -> None:
-    with pytest.warns(UserWarning):
-        assert _calc_answer("x + y", '{"x": 1, "y": "oops"}') == "y + 1.0"
+    with pytest.warns(UserWarning), pytest.raises(ValueError) as excinfo:
+        _calc_answer("x + y", '{"x": 1, "y": "oops"}')
+    msg = str(excinfo.value)
+    assert "x + y" in msg
+    assert "use '*' for multiplication" in msg
 
 
 def test_calc_answer_timeout_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
