@@ -44,3 +44,11 @@ def test_calc_answer_timeout_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(tools, "_run_with_timeout", _timeout)
     assert tools._calc_answer("diff(x**2, x)", '{}') == "Derivative(x**2, x)"
+
+
+def test_calc_answer_implicit_multiplication() -> None:
+    assert _calc_answer("m x", '{"m": 3, "x": 4}') == 12
+
+
+def test_calc_answer_equation_rhs() -> None:
+    assert _calc_answer("y = m x", '{"m": 3, "x": 4}') == 12
