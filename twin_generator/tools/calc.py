@@ -48,11 +48,17 @@ def _calc_answer(expression: str, params_json: str) -> Any:  # noqa: ANN401 â€“Â
     * Coerces nearâ€‘integers to ``int`` when appropriate
     """
     import sympy as sp
+    from sympy.core.relational import Relational
 
     params = json.loads(params_json)
     sanitized, skipped = _sanitize_params(params)
     if skipped:
         warnings.warn(f"Skipped non-numeric params: {', '.join(skipped)}")
+
+    error_msg = (
+        f"Could not evaluate expression '{expression}'. "
+        "Remove the equation sign, use '*' for multiplication, and provide values for all variables."
+    )
 
     def _make_safe(func: Any, fallback: Any) -> Any:
         def _wrapper(*args: Any, **kwargs: Any) -> Any:
@@ -78,6 +84,9 @@ def _calc_answer(expression: str, params_json: str) -> Any:  # noqa: ANN401 â€“Â
         expr = sp.sympify(expression, locals=local_ops)
     except Exception:
         expr = sp.sympify(expression)
+
+    if isinstance(expr, Relational):
+        raise ValueError(error_msg)
 
     def _eval_advanced(e: sp.Expr, depth: int = 0) -> sp.Expr:
         if depth > 5:
@@ -110,6 +119,9 @@ def _calc_answer(expression: str, params_json: str) -> Any:  # noqa: ANN401 â€“Â
     else:
         result = exact_simpl
 
+    if getattr(result, "free_symbols", set()):
+        raise ValueError(error_msg)
+
     try:
         if result.is_integer:  # type: ignore[attr-defined]
             return int(result)  # type: ignore[misc]
@@ -122,7 +134,7 @@ def _calc_answer(expression: str, params_json: str) -> Any:  # noqa: ANN401 â€“Â
             return int(round(f))
         return f
     except Exception:
-        return str(result)
+        raise ValueError(error_msg)
 
 
 calc_answer_tool = function_tool(_calc_answer)
