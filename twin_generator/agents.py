@@ -17,8 +17,9 @@ ConceptAgent = Agent(
     name="ConceptAgent",
     instructions=(
         "Input: JSON produced by ParserAgent. Identify the key mathematical concept(s) and outline "
-        "the canonical solution path in ordered steps. Output: a plain-text string with the concept "
-        "followed by numbered steps. Do not return JSON or extra commentary."
+        "the canonical solution path in ordered steps. Output: begin with 'Concept: <summary>' on the "
+        "first line, then list numbered steps starting with '1.' each on its own line. Do not include "
+        "extra commentary or JSON formatting."
     ),
     model="gpt-5-nano",
 )
@@ -69,10 +70,10 @@ SampleAgent = Agent(
 StemChoiceAgent = Agent(
     name="StemChoiceAgent",
     instructions=(
-        "Input: JSON {template, params, graph_path?, table_html?}. Substitute params into the template and craft a new "
-        "SAT-style question `twin_stem` that tests the same concept. Generate an array `choices` of plausible answers with "
-        "exactly one correct option and provide a brief `rationale` for that choice. Output: one JSON object with "
-        "double-quoted keys/values and no trailing text."
+        "Input: JSON {template, params, graph_path?, table_html?}. Substitute params into the template "
+        "and craft a new SAT-style question `twin_stem` that tests the same concept. Generate an array "
+        "`choices` of plausible answers with exactly one correct option and provide a brief `rationale` "
+        "for that choice. Output: one JSON object with double-quoted keys/values and no trailing text."
     ),
     model="gpt-5-nano",
 )
@@ -80,10 +81,11 @@ StemChoiceAgent = Agent(
 FormatterAgent = Agent(
     name="FormatterAgent",
     instructions=(
-        "Input: JSON {twin_stem, choices, answer_value, rationale, graph_path?, table_html?}. Return a minified JSON object "
-        "containing twin_stem, choices[], answer_index (0-based index of the correct choice), answer_value (matching the "
-        "correct choice), rationale, and optional graph_path/table_html. Ensure answer_index and answer_value align with the "
-        "choices. Output must be a single JSON object with double-quoted keys/values and no trailing text."
+        "Input: JSON {twin_stem, choices, answer_value, rationale, graph_path?, table_html?}. Return a "
+        "minified JSON object containing twin_stem, choices[], answer_index (0-based index of the "
+        "correct choice), answer_value (matching the correct choice), rationale, and optional "
+        "graph_path/table_html. Ensure answer_index and answer_value align with the choices. Output "
+        "must be a single JSON object with double-quoted keys/values and no trailing text."
     ),
     model="gpt-5-nano",
 )
@@ -91,9 +93,9 @@ FormatterAgent = Agent(
 QAAgent = Agent(
     name="QAAgent",
     instructions=(
-        "Input: JSON produced by FormatterAgent. Verify strict JSON formatting and internal consistency—fields present, "
-        "answer_index matches answer_value and choices, and any assets are valid. Output the plain string 'pass' if the data is "
-        "sound; otherwise return a brief reason."
+        "Input: JSON produced by FormatterAgent. Verify strict JSON formatting and internal "
+        "consistency—fields present, answer_index matches answer_value and choices, and any assets are "
+        "valid. Output the plain string 'pass' if the data is sound; otherwise return a brief reason."
     ),
     model="gpt-5-nano",
 )
@@ -102,14 +104,16 @@ SymbolicSolveAgent = Agent(
     name="SymbolicSolveAgent",
     instructions=(
         "Input: JSON {template, params}. Substitute params into template to form the target relation/"
-        "expression and solve exactly for the intended unknown(s). Output: ONE SymPy-parsable STRING, nothing else. "
-        "Use exact arithmetic (no floats). Operators/functions: **, *, sqrt, Abs, log, pi, E, I, oo; logic And/Or; "
-        "sets Interval, Union, FiniteSet, EmptySet, ConditionSet. Default domain: Reals; honor constraints and nonzero "
-        "denominators. Verify candidates by substitution into the original relation(s) and drop extraneous roots. "
-        "Trig: give GENERAL solutions with integer k in Integers. Inequalities/solution sets: return SymPy set syntax "
-        "(e.g., Union(Interval.Lopen(0,2), Interval(3,oo))). Multiple solutions: FiniteSet or Union; systems: FiniteSet "
-        "of tuples or Piecewise only if required. If no solution: EmptySet. If unresolved under constraints: "
-        "ConditionSet(var, condition, S.Reals). Deterministic ordering. No commentary."
+        "expression and solve exactly for the intended unknown(s). Output: ONE SymPy-parsable STRING, "
+        "nothing else. Use exact arithmetic (no floats). Operators/functions: **, *, sqrt, Abs, log, "
+        "pi, E, I, oo; logic And/Or; sets Interval, Union, FiniteSet, EmptySet, ConditionSet. Default "
+        "domain: Reals; honor constraints and nonzero denominators. Verify candidates by substitution "
+        "into the original relation(s) and drop extraneous roots. Trig: give GENERAL solutions with "
+        "integer k in Integers. Inequalities/solution sets: return SymPy set syntax (e.g., "
+        "Union(Interval.Lopen(0,2), Interval(3,oo))). Multiple solutions: FiniteSet or Union; "
+        "systems: FiniteSet of tuples or Piecewise only if required. If no solution: EmptySet. If "
+        "unresolved under constraints: ConditionSet(var, condition, S.Reals). Deterministic ordering. "
+        "No commentary."
     ),
     model="gpt-5-nano",
 )
@@ -117,13 +121,14 @@ SymbolicSolveAgent = Agent(
 SymbolicSimplifyAgent = Agent(
     name="SymbolicSimplifyAgent",
     instructions=(
-        "Input: ONE SymPy expression STRING. Output: ONE SymPy expression STRING that is equivalent and simpler; "
-        "if no provable improvement exists, return the INPUT EXACTLY (idempotent no-op). Use exact arithmetic; no floats. "
-        "Preserve correctness on the default real domain unless the expression dictates otherwise. Do not cancel factors "
-        "that may be zero; do not combine logs unless positivity of arguments is guaranteed. Avoid gratuitous expansion; "
-        "keep structured forms unless expansion clearly simplifies. Respect principal branches for roots/abs; introduce "
-        "Piecewise only when needed. Merge adjacent intervals/guards when present. Deterministic symbol/term ordering. "
-        "No commentary."
+        "Input: ONE SymPy expression STRING. Output: ONE SymPy expression STRING that is equivalent "
+        "and simpler; if no provable improvement exists, return the INPUT EXACTLY (idempotent no-op). "
+        "Use exact arithmetic; no floats. Preserve correctness on the default real domain unless the "
+        "expression dictates otherwise. Do not cancel factors that may be zero; do not combine logs "
+        "unless positivity of arguments is guaranteed. Avoid gratuitous expansion; keep structured "
+        "forms unless expansion clearly simplifies. Respect principal branches for roots/abs; "
+        "introduce Piecewise only when needed. Merge adjacent intervals/guards when present. "
+        "Deterministic symbol/term ordering. No commentary."
     ),
     model="gpt-5-nano",
 )
@@ -131,9 +136,10 @@ SymbolicSimplifyAgent = Agent(
 OperationsAgent = Agent(
     name="OperationsAgent",
     instructions=(
-        "Input: JSON {data: {...}, operations: [...]}. Execute each operation—invoking tools when needed—to compute "
-        "intermediate results or update parameters. Output: a single JSON object with double-quoted keys/values containing any "
-        "newly derived fields or revised params, with no trailing text or commentary."
+        "Input: JSON {data: {...}, operations: [...]}. Execute each operation—invoking tools when "
+        "needed—to compute intermediate results or update parameters. Output: a single JSON object "
+        "with double-quoted keys/values containing any newly derived fields or revised params, with "
+        "no trailing text or commentary."
     ),
     model="gpt-5-nano",
 )
