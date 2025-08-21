@@ -25,11 +25,13 @@ ConceptAgent = Agent(
 
 # TemplateAgent expected schema:
 # {
-#   "template": "problem statement with symbolic parameters",
-#   "domains": {"symbol": "domain description", ...},
-#   "answer_expression": "expression using the symbols",
-#   "operations": [{"expr": "...", "output": "..."}],
-#   "visual": {"type": "none|graph|table", "data": {...}}
+#   "template": <str>,                         # problem statement with symbolic parameters
+#   "domains": {symbol: <str>, ...},           # domain for each symbol; covers all symbols used
+#   "answer_expression": <str>,                # expression using symbols and operation outputs
+#   "operations": [                            # list may be empty
+#       {"expr": <str>, "output": <str>, ...} # or {"expr": <str>, "outputs": [<str>, ...], ...}
+#   ],
+#   "visual": {"type": "none"|"graph"|"table", "data": {...}}
 # }
 # Example:
 # {
@@ -42,10 +44,14 @@ ConceptAgent = Agent(
 TemplateAgent = Agent(
     name="TemplateAgent",
     instructions=(
-        "Input: JSON {parsed, concept}. Replace literals with symbolic parameters and supply their "
-        "domains. Include fields: template, domains, answer_expression, operations[], and visual → "
-        "{type: none|graph|table, data:{}}. Output: one JSON object with double-quoted keys/values and "
-        "no trailing text."
+        "Input: JSON {parsed, concept}. Replace literals with symbolic parameters and state their "
+        "domains. Return exactly one JSON object with double-quoted keys/values and no trailing text. "
+        "Required fields: template (string problem statement); domains (object mapping each symbol to a "
+        "domain string, covering all symbols in template, answer_expression, and operations); "
+        "answer_expression (string using only declared symbols and operation outputs); operations (array "
+        "of objects, each with expr:string and either output:string or outputs:[string]; extra keys act "
+        "as tool arguments referencing other fields); visual (object {type:'none'|'graph'|'table', "
+        "data:{}}). Ensure cross-field consistency throughout."
     ),
     model="gpt-5-nano",
 )
