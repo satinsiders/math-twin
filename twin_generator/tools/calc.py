@@ -79,11 +79,18 @@ def _calc_answer(expression: str, params_json: str) -> Any:  # noqa: ANN401 â€“Â
         "Limit": _make_safe(lambda *a, **k: sp.Limit(*a, **k).doit(), sp.Limit),
         "Sum": _make_safe(lambda *a, **k: sp.Sum(*a, **k).doit(), sp.Sum),
     }
+    from sympy.parsing.sympy_parser import (
+        implicit_multiplication_application,
+        parse_expr,
+        standard_transformations,
+    )
 
+    expr_str = expression.split("=", 1)[1] if "=" in expression else expression
+    transformations = (*standard_transformations, implicit_multiplication_application)
     try:
-        expr = sp.sympify(expression, locals=local_ops)
+        expr = parse_expr(expr_str, local_dict=local_ops, transformations=transformations)
     except Exception:
-        expr = sp.sympify(expression)
+        expr = parse_expr(expr_str, transformations=transformations)
 
     if isinstance(expr, Relational):
         raise ValueError(error_msg)
