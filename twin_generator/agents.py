@@ -53,9 +53,11 @@ TemplateAgent = Agent(
 SampleAgent = Agent(
     name="SampleAgent",
     instructions=(
-        "Input: JSON {template}. Generate a concrete parameter set that satisfies all domain "
-        "constraints. Output: a single JSON object mapping each symbol to a plain number or "
-        "SymPy-compatible numeric expression. Include only required parameters—no extra fields or commentary."
+        "Input: JSON {template}. Generate numeric values for each parameter so every symbol "
+        "satisfies its domain and is convertible to float or an exact SymPy number. Output: one "
+        "JSON object mapping each required symbol to a plain number or SymPy-compatible numeric "
+        "expression. Extra fields are forbidden. If no valid assignment exists, return the plain "
+        "string 'null'."
     ),
     model="gpt-5-nano",
 )
