@@ -11,6 +11,7 @@ from .qa_tools import (
     sanitize_params_tool,
     validate_output_tool,
 )
+from .symbolic_solve import _symbolic_solve, symbolic_solve_tool
 
 __all__ = [
     "make_html_table_tool",
@@ -19,10 +20,12 @@ __all__ = [
     "sanitize_params_tool",
     "validate_output_tool",
     "check_asset_tool",
+    "symbolic_solve_tool",
     "_make_html_table",
     "_render_graph",
     "_calc_answer",
     "_sanitize_params_tool",
     "_validate_output_tool",
     "_check_asset",
+    "_symbolic_solve",
 ]
