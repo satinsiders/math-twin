@@ -8,7 +8,7 @@ from dataclasses import asdict, dataclass
 from typing import Callable
 
 from .agents import QAAgent
-from .pipeline_helpers import AgentsRunner, _TOOLS
+from .pipeline_helpers import AgentsRunner, _QA_TOOLS
 from .utils import get_final_output
 from .pipeline_state import PipelineState
 
@@ -80,7 +80,7 @@ class _Runner:
             )
             return False, qa_out
         try:
-            qa_res = AgentsRunner.run_sync(QAAgent, input=qa_in, tools=_TOOLS)
+            qa_res = AgentsRunner.run_sync(QAAgent, input=qa_in, tools=_QA_TOOLS)
             qa_out = get_final_output(qa_res).strip().lower()
         except Exception as exc:  # pragma: no cover - defensive
             raise RuntimeError(f"QAAgent failed: {exc}")

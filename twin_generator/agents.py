@@ -97,10 +97,14 @@ FormatterAgent = Agent(
 QAAgent = Agent(
     name="QAAgent",
     instructions=(
-        "Input: JSON {\"step\": <name>, \"data\": <PipelineState>}. First ensure the JSON is syntactically valid. "
-        "Then verify that every field required for the named pipeline step exists and that all values are internally "
-        "consistent—indices align with arrays, assets exist, and constraints are met. Output only the string 'pass' when "
-        "all checks succeed; otherwise return a concise reason for failure."
+        "Input: JSON {\"step\": <name>, \"data\": <PipelineState>}. First ensure the JSON is "
+        "syntactically valid. Use sanitize_params_tool to check numeric params and report skipped "
+        "keys. Invoke validate_output_tool to coerce answers and confirm formatter output. When "
+        "graph_path or table_html is present, call check_asset_tool to verify the asset exists. "
+        "Then verify that every field required for the named pipeline step exists and that all "
+        "values are internally consistent—indices align with arrays, assets exist, and constraints "
+        "are met. Output only the string 'pass' when all checks succeed; otherwise return a concise "
+        "reason for failure."
     ),
     model="gpt-5-nano",
 )
@@ -126,12 +130,17 @@ SymbolicSolveAgent = Agent(
 SymbolicSimplifyAgent = Agent(
     name="SymbolicSimplifyAgent",
     instructions=(
-        "Input: ONE SymPy expression STRING. Output: ONE SymPy expression STRING that is mathematically equivalent and simpler. "
-        "If no provable simplification exists, return the original input expression unchanged. Use exact arithmetic; no floats. "
-        "Enforce deterministic ordering of all symbols and terms. Preserve correctness on the default real domain unless the expression dictates otherwise. "
-        "Never perform domain-sensitive transformations without proof: do not cancel factors that may be zero, and do not combine logs or manipulate Abs unless argument positivity is guaranteed. "
-        "Avoid gratuitous expansion; keep structured forms unless expansion clearly simplifies. Respect principal branches for roots and Abs; introduce Piecewise only when needed and merge adjacent intervals/guards. "
-        "Return only the final expression with no commentary."
+        "Input: ONE SymPy expression STRING. Output: ONE SymPy expression STRING that is "
+        "mathematically equivalent and simpler. If no provable simplification exists, return "
+        "the original input expression unchanged. Use exact arithmetic; no floats. Enforce "
+        "deterministic ordering of all symbols and terms. Preserve correctness on the default "
+        "real domain unless the expression dictates otherwise. Never perform domain-sensitive "
+        "transformations without proof: do not cancel factors that may be zero, and do not "
+        "combine logs or manipulate Abs unless argument positivity is guaranteed. Avoid "
+        "gratuitous expansion; keep structured forms unless expansion clearly simplifies. "
+        "Respect principal branches for roots and Abs; introduce Piecewise only when needed "
+        "and merge adjacent intervals/guards. Return only the final expression with no "
+        "commentary."
     ),
     model="gpt-5-nano",
 )

@@ -19,6 +19,7 @@ __all__ = [
     "AgentsRunner",
     "invoke_agent",
     "_TOOLS",
+    "_QA_TOOLS",
     "_TEMPLATE_TOOLS",
     "_TEMPLATE_MAX_RETRIES",
     "_JSON_MAX_RETRIES",
@@ -32,6 +33,11 @@ _TOOLS = [
     calc_answer_tool,
     render_graph_tool,
     make_html_table_tool,
+]
+
+# QAAgent also needs sanitization and output validation helpers.
+_QA_TOOLS = [
+    *_TOOLS,
     sanitize_params_tool,
     validate_output_tool,
     check_asset_tool,
