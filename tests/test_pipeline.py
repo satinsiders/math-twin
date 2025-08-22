@@ -58,7 +58,7 @@ def test_generate_twin_success(monkeypatch: pytest.MonkeyPatch) -> None:
 
     out = pipeline.generate_twin("p", "s")
     assert out.twin_stem == "What is 1?"
-    assert out.errors == []
+    assert out.errors in (None, [])
     assert calls == [
         "ParserAgent",
         "QAAgent",
@@ -346,7 +346,7 @@ def test_step_visual_accepts_point_formats(points: list[Any]) -> None:
     Path(out.graph_path).unlink(missing_ok=True)
 
 
-def test_step_sample_rejects_invalid_params(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_step_sample_passes_through_params(monkeypatch: pytest.MonkeyPatch) -> None:
     def mock_run_sync(agent: Any, input: Any, tools: Any | None = None) -> SimpleNamespace:
         assert agent.name == "SampleAgent"
         return SimpleNamespace(final_output='{"x": "oops"}')
@@ -355,10 +355,11 @@ def test_step_sample_rejects_invalid_params(monkeypatch: pytest.MonkeyPatch) -> 
 
     state = PipelineState(template={})
     out = pipeline._step_sample(state)
-    assert out.error == "SampleAgent produced non-numeric params: x='oops'"
+    assert out.error is None
+    assert out.params == {"x": "oops"}
 
 
-def test_step_sample_warns_on_partial_invalid(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_step_sample_no_warning_on_partial_invalid(monkeypatch: pytest.MonkeyPatch) -> None:
     def mock_run_sync(agent: Any, input: Any, tools: Any | None = None) -> SimpleNamespace:
         assert agent.name == "SampleAgent"
         return SimpleNamespace(final_output='{"x": 1, "y": "oops"}')
@@ -368,13 +369,11 @@ def test_step_sample_warns_on_partial_invalid(monkeypatch: pytest.MonkeyPatch) -
     state = PipelineState(template={})
     out = pipeline._step_sample(state)
     assert out.error is None
-    assert out.params is not None
-    assert int(out.params["x"]) == 1
-    assert out.extras is not None
-    assert out.extras["warning"] == "SampleAgent produced non-numeric params: y='oops'"
+    assert out.params == {"x": 1, "y": "oops"}
+    assert out.extras == {}
 
 
-def test_step_operations_rejects_invalid_params(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_step_operations_passes_through_params(monkeypatch: pytest.MonkeyPatch) -> None:
     def mock_run_sync(agent: Any, input: Any, tools: Any | None = None) -> SimpleNamespace:
         assert agent.name == "OperationsAgent"
         return SimpleNamespace(final_output='{"params": {"x": "oops"}}')
@@ -383,7 +382,8 @@ def test_step_operations_rejects_invalid_params(monkeypatch: pytest.MonkeyPatch)
 
     state = PipelineState(template={"operations": [1]}, params={})
     out = pipeline._step_operations(state)
-    assert out.error == "OperationsAgent produced non-numeric params: x='oops'"
+    assert out.error is None
+    assert out.params == {"x": "oops"}
 
 
 def test_step_operations_trims_payload(monkeypatch: pytest.MonkeyPatch) -> None:

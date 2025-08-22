@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, SupportsFloat, cast
+from typing import Any, cast
 
 from . import constants as C
 from .agents import (
@@ -22,10 +22,9 @@ from .pipeline_helpers import (
     _TEMPLATE_MAX_RETRIES,
     invoke_agent,
 )
-from .tools.calc import _calc_answer, _sanitize_params
+from .tools.calc import _calc_answer
 from .tools.graph import _render_graph
 from .tools.html_table import _make_html_table
-from .utils import coerce_answers, validate_output
 from .pipeline_state import PipelineState
 
 
@@ -79,22 +78,7 @@ def _step_sample(state: PipelineState) -> PipelineState:
     if not isinstance(out, dict):
         state.error = "SampleAgent produced non-dict params"
         return state
-    cleaned, skipped = _sanitize_params(out)
-    if not cleaned:
-        if skipped:
-            bad = ", ".join(f"{k}={out[k]!r}" for k in skipped)
-            state.error = f"SampleAgent produced non-numeric params: {bad}"
-            return state
-        state.params = {}
-        return state
-    numeric_params: dict[str, Any] = {}
-    for key, val in cleaned.items():
-        fval = float(cast(SupportsFloat, val))
-        numeric_params[key] = int(fval) if fval.is_integer() else fval
-    state.params = numeric_params
-    if skipped:
-        bad = ", ".join(f"{k}={out[k]!r}" for k in skipped)
-        state.extras["warning"] = f"SampleAgent produced non-numeric params: {bad}"
+    state.params = out
     return state
 
 
@@ -160,11 +144,6 @@ def _step_operations(state: PipelineState) -> PipelineState:
         return state
     params_out = out.get("params")
     if isinstance(params_out, dict):
-        _, skipped = _sanitize_params(params_out)
-        if skipped:
-            bad = ", ".join(f"{k}={params_out[k]!r}" for k in skipped)
-            state.error = f"OperationsAgent produced non-numeric params: {bad}"
-            return state
         state.params = params_out
     expected_outputs: set[str] = set()
     for op in ops:
@@ -287,9 +266,6 @@ def _step_format(state: PipelineState) -> PipelineState:
         out_dict.setdefault("graph_path", state.graph_path)
     if state.table_html:
         out_dict.setdefault("table_html", state.table_html)
-
-    out_dict = coerce_answers(out_dict)
-    out_dict = validate_output(out_dict)
 
     state.twin_stem = out_dict.get("twin_stem")
     state.choices = out_dict.get("choices")
