@@ -98,13 +98,13 @@ QAAgent = Agent(
     name="QAAgent",
     instructions=(
         "Input: JSON {\"step\": <name>, \"data\": <PipelineState>}. First ensure the JSON is "
-        "syntactically valid. Use sanitize_params_tool to check numeric params and report skipped "
-        "keys. Invoke validate_output_tool to coerce answers and confirm formatter output. When "
-        "graph_path or table_html is present, call check_asset_tool to verify the asset exists. "
-        "Then verify that every field required for the named pipeline step exists and that all "
-        "values are internally consistent—indices align with arrays, assets exist, and constraints "
-        "are met. Output only the string 'pass' when all checks succeed; otherwise return a concise "
-        "reason for failure."
+        "syntactically valid. Consult docs/tools.md for tool behavior before invoking any. Use "
+        "sanitize_params_tool to check numeric params and report skipped keys. Invoke "
+        "validate_output_tool to coerce answers and confirm formatter output. When graph_path or "
+        "table_html is present, call check_asset_tool to verify the asset exists. Then verify that "
+        "every field required for the named pipeline step exists and that all values are internally "
+        "consistent—indices align with arrays, assets exist, and constraints are met. Output only "
+        "the string 'pass' when all checks succeed; otherwise return a concise reason for failure."
     ),
     model="gpt-5-nano",
 )
@@ -148,7 +148,9 @@ SymbolicSimplifyAgent = Agent(
 OperationsAgent = Agent(
     name="OperationsAgent",
     instructions=(
-        "Input: JSON {data: {...}, operations: [...]}. Each operation is an object with: "
+        "Input: JSON {data: {...}, operations: [...]}. Review docs/tools.md to understand available tools "
+        "before executing any operation. "
+        "Each operation is an object with: "
         "expr – an expression using fields from data or prior outputs; optional tool – the name of a registered tool; "
         "output (single key) or outputs (array of keys) naming where results should be stored; "
         "and any additional fields that reference entries in data or earlier outputs. "

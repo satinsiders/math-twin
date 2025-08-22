@@ -126,7 +126,7 @@ Intermediate fields such as `parsed`, `concept`, `template`, `params`, `symbolic
 ## Extending the System
 
 - **Agents** – Agent definitions live in [`twin_generator/agents.py`](twin_generator/agents.py). Each agent specifies a name, prompt instructions, and optional model.
-- **Tools** – Use [`agents.tool.function_tool`](agents/tool.py) to expose a Python function as a callable tool. Type hints are converted into the JSON schema understood by OpenAI's tool‑calling interface.
+- **Tools** – Use [`agents.tool.function_tool`](agents/tool.py) to expose a Python function as a callable tool. Type hints are converted into the JSON schema understood by OpenAI's tool‑calling interface. See [`docs/tools.md`](docs/tools.md) for available tools; agents should review it before invoking any tool.
 - **Templates** – See [`docs/template_agent.md`](docs/template_agent.md) for the JSON schema produced by the `TemplateAgent`.
 
 ### OperationsAgent
