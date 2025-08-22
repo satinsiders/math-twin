@@ -129,6 +129,25 @@ Intermediate fields such as `parsed`, `concept`, `template`, `params`, `symbolic
 - **Tools** – Use [`agents.tool.function_tool`](agents/tool.py) to expose a Python function as a callable tool. Type hints are converted into the JSON schema understood by OpenAI's tool‑calling interface.
 - **Templates** – See [`docs/template_agent.md`](docs/template_agent.md) for the JSON schema produced by the `TemplateAgent`.
 
+### OperationsAgent
+
+Each item in the `operations` array may call a registered tool by including a
+`"tool"` field.  The newly added `symbolic_solve_tool` finds exact solutions to
+symbolic equations using SymPy.
+
+```json
+{
+  "tool": "symbolic_solve_tool",
+  "eq_json": "{\"equation\": \"x**2 - 1\", \"variable\": \"x\"}",
+  "output": "roots"
+}
+```
+
+The `eq_json` string must encode an object with `equation` (the equation or
+expression, optional `=` sign allowed) and `variable` (single symbol name or
+array of names). The tool returns a JSON array of solution dictionaries with
+simplified expressions.
+
 You can register additional tools or swap out agents to customize the pipeline for different domains.
 
 ## Development

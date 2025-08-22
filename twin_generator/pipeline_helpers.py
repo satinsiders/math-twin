@@ -8,6 +8,7 @@ from agents.run import Runner as AgentsRunner  # type: ignore
 from .tools.calc import calc_answer_tool
 from .tools.graph import render_graph_tool
 from .tools.html_table import make_html_table_tool
+from .tools.symbolic_solve import symbolic_solve_tool
 from .tools.qa_tools import (
     check_asset_tool,
     sanitize_params_tool,
@@ -33,6 +34,7 @@ _TOOLS = [
     calc_answer_tool,
     render_graph_tool,
     make_html_table_tool,
+    symbolic_solve_tool,
 ]
 
 # QAAgent also needs sanitization and output validation helpers.
