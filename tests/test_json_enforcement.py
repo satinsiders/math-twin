@@ -13,6 +13,15 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 import twin_generator.pipeline as pipeline  # noqa: E402
 
 
+def _qa_response(out: str, tools: Any | None) -> SimpleNamespace:
+    """Simulate QAAgent using tools before returning *out*."""
+    tool_map = {t["name"]: t for t in (tools or [])}
+    func = tool_map.get("_sanitize_params_tool", {}).get("_func")
+    if func:
+        func("{}")
+    return SimpleNamespace(final_output=out)
+
+
 @pytest.mark.parametrize(
     "bad_agent",
     ["SampleAgent", "OperationsAgent", "StemChoiceAgent", "FormatterAgent"],
@@ -23,7 +32,7 @@ def test_generate_twin_invalid_json(monkeypatch: pytest.MonkeyPatch, bad_agent: 
     def mock_run_sync(agent: Any, input: Any, tools: Any | None = None) -> SimpleNamespace:
         name = agent.name
         if name == "QAAgent":
-            return SimpleNamespace(final_output="pass")
+            return _qa_response("pass", tools)
         if name == "ParserAgent":
             return SimpleNamespace(final_output="{}")
         if name == "ConceptAgent":
