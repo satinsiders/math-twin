@@ -145,7 +145,7 @@ class Runner:
                         f"tool {name} provided invalid JSON arguments: {e}"
                     ) from e
                 result = func(**args)
-                outputs.append({"tool_call_id": call.id, "output": str(result)})
+                outputs.append({"tool_call_id": call.id, "output": json.dumps(result, default=str)})
             resp = client.responses.submit_tool_outputs(
                 response_id=resp.id, tool_outputs=outputs
             )
