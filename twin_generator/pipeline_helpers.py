@@ -82,8 +82,8 @@ def invoke_agent(
     message if parsing ultimately fails.
     """
     agent_name = getattr(agent, "name", getattr(agent, "__name__", str(agent)))
-    attempts = 0
-    while True:
+    err_msg = "exceeded max retries"
+    for _attempt in range(max_retries):
         try:
             res = AgentsRunner.run_sync(agent, input=payload, tools=tools)
         except Exception as exc:  # pragma: no cover - defensive
@@ -97,6 +97,5 @@ def invoke_agent(
             parsed: Any = safe_json(out)
             return parsed, None
         except ValueError as exc:
-            attempts += 1
-            if attempts >= max_retries:
-                return None, f"{agent_name} failed: {exc}"
+            err_msg = str(exc)
+    return None, f"{agent_name} failed: {err_msg}"
