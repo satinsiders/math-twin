@@ -402,6 +402,14 @@ def test_step_visual_accepts_point_formats(points: list[Any]) -> None:
     Path(out.graph_path).unlink(missing_ok=True)
 
 
+def test_step_visual_renders_table() -> None:
+    visual = {"type": "table", "data": {"header": ["A"], "rows": [[1], [2]]}}
+    state = PipelineState(template={"visual": visual})
+    out = pipeline._step_visual(state)
+    assert out.error is None
+    assert out.table_html and out.table_html.startswith("<table>")
+
+
 def test_step_sample_passes_through_params(monkeypatch: pytest.MonkeyPatch) -> None:
     def mock_run_sync(agent: Any, input: Any, tools: Any | None = None) -> SimpleNamespace:
         assert agent.name == "SampleAgent"

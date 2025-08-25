@@ -25,6 +25,7 @@ from .pipeline_helpers import (
 from .tools.calc import _calc_answer
 from .tools.graph import _render_graph
 from .tools.html_table import _make_html_table
+from .utils import _normalize_graph_points
 from .pipeline_state import PipelineState
 
 
@@ -189,42 +190,34 @@ def _step_operations(state: PipelineState) -> PipelineState:
     return state
 
 
+def _select_graph_spec(
+    visual: dict[str, Any], user_spec: Any, force: bool
+) -> Any:  # noqa: ANN401 - generic return
+    """Choose the graph spec given visual config, user override, and force flag."""
+    vtype = visual.get("type")
+    if force:
+        return user_spec or visual.get("data") or C.DEFAULT_GRAPH_SPEC
+    if vtype == "graph":
+        return visual.get("data") or user_spec or C.DEFAULT_GRAPH_SPEC
+    return None
+
+
+def _render_table(visual: dict[str, Any]) -> str | None:
+    """Render a table visual to HTML if applicable."""
+    if visual.get("type") == "table":
+        return _make_html_table(json.dumps(visual.get("data", {})))
+    return None
+
+
 def _step_visual(state: PipelineState) -> PipelineState:
     visual = state.template.get("visual") if isinstance(state.template, dict) else None
     if not isinstance(visual, dict):
         visual = {"type": "none"}
-    force = bool(state.force_graph)
-    user_spec = state.graph_spec
 
-    def _normalize_graph_points(spec: dict[str, Any]) -> None:
-        points = spec.get("points")
-        if not isinstance(points, list):
-            return
-        normalized: list[Any] = []
-        for pt in points:
-            if isinstance(pt, dict) and (
-                ("X" in pt and "Y" in pt) or ("x" in pt and "y" in pt)
-            ):
-                x = pt.get("X", pt.get("x"))
-                y = pt.get("Y", pt.get("y"))
-                if x is None or y is None:
-                    normalized.append(pt)
-                else:
-                    normalized.append([float(x), float(y)])
-            else:
-                normalized.append(pt)
-        spec["points"] = normalized
-
-    spec: Any = None
-    vtype = visual.get("type")
-    if force:
-        spec = user_spec or visual.get("data") or C.DEFAULT_GRAPH_SPEC
-    elif vtype == "graph":
-        spec = visual.get("data") or user_spec or C.DEFAULT_GRAPH_SPEC
-
+    spec = _select_graph_spec(visual, state.graph_spec, bool(state.force_graph))
     if spec is not None:
         if isinstance(spec, dict):
-            if force and not spec.get("points"):
+            if state.force_graph and not spec.get("points"):
                 spec["points"] = C.DEFAULT_GRAPH_SPEC.get("points", [])
             _normalize_graph_points(cast(dict[str, Any], spec))
         try:
@@ -233,8 +226,9 @@ def _step_visual(state: PipelineState) -> PipelineState:
             state.error = f"Invalid graph spec: {exc}"
         return state
 
-    if vtype == "table":
-        state.table_html = _make_html_table(json.dumps(visual.get("data", {})))
+    table_html = _render_table(visual)
+    if table_html is not None:
+        state.table_html = table_html
     return state
 
 
