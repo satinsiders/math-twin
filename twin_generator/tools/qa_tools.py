@@ -44,7 +44,19 @@ validate_output_tool["name"] = "validate_output_tool"
 
 
 def _check_asset(graph_path: str | None = None, table_html: str | None = None) -> bool:
-    """Return ``True`` if ``graph_path`` exists or ``table_html`` is present."""
+    """Return ``True`` if no asset is required or one is available.
+
+    The QA pipeline may omit both ``graph_path`` and ``table_html`` when a twin
+    question does not use a visual or tabular asset. In that case there is no
+    asset to validate and the function should consider the check successful.
+
+    Parameters are considered missing when they are ``None`` or empty strings.
+    """
+
+    # If both assets are missing, there is nothing to validate.
+    if not graph_path and not table_html:
+        return True
+
     if graph_path and os.path.isfile(graph_path):
         return True
     if table_html and str(table_html).strip():
