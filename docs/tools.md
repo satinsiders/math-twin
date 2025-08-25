@@ -2,6 +2,11 @@
 
 Agents must read this document before calling any tool.
 
+If a QA check fails, the next agent run includes a ``qa_feedback`` field in its
+JSON payload (or appended text for plain prompts) containing the failure
+message. Agents should incorporate this feedback to fix the prior issues before
+responding again.
+
 ## calc_answer_tool
 Evaluates a mathematical expression with given parameters using SymPy. Use for exact numeric computation of expressions and intermediate results.
 
