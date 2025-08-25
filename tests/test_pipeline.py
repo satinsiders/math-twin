@@ -19,7 +19,7 @@ from twin_generator.constants import GraphSpec  # noqa: E402
 def _qa_response(out: str, tools: Any | None) -> SimpleNamespace:
     """Simulate QAAgent using its tools before returning *out*."""
     tool_map = {t["name"]: t for t in (tools or [])}
-    func = tool_map.get("_sanitize_params_tool", {}).get("_func")
+    func = tool_map.get("sanitize_params_tool", {}).get("_func")
     if func:
         func("{}")
     return SimpleNamespace(final_output=out)
@@ -653,7 +653,7 @@ def test_qa_detects_invalid_params(monkeypatch: pytest.MonkeyPatch) -> None:
             payload = json.loads(input)
             params = payload["data"].get("params", {})
             tool_map = {t["name"]: t for t in (tools or [])}
-            res = tool_map["_sanitize_params_tool"]["_func"](json.dumps(params))
+            res = tool_map["sanitize_params_tool"]["_func"](json.dumps(params))
             if res["skipped"]:
                 return SimpleNamespace(final_output="invalid params")
             return SimpleNamespace(final_output="pass")
@@ -684,7 +684,7 @@ def test_qa_detects_output_mismatch(monkeypatch: pytest.MonkeyPatch) -> None:
         if name == "QAAgent":
             payload = json.loads(input)
             tool_map = {t["name"]: t for t in (tools or [])}
-            res = tool_map["_validate_output_tool"]["_func"](json.dumps(payload["data"]))
+            res = tool_map["validate_output_tool"]["_func"](json.dumps(payload["data"]))
             if res.get("errors"):
                 return SimpleNamespace(final_output="output mismatch")
             return SimpleNamespace(final_output="pass")
@@ -716,7 +716,7 @@ def test_qa_detects_missing_asset(monkeypatch: pytest.MonkeyPatch) -> None:
             payload = json.loads(input)
             data = payload["data"]
             tool_map = {t["name"]: t for t in (tools or [])}
-            ok = tool_map["_check_asset"]["_func"](
+            ok = tool_map["check_asset_tool"]["_func"](
                 data.get("graph_path"), data.get("table_html")
             )
             return SimpleNamespace(final_output="pass" if ok else "missing asset")

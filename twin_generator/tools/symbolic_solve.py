@@ -60,5 +60,5 @@ def _symbolic_solve(eq_json: str) -> str:
     ]
     return json.dumps(simplified)
 
-
 symbolic_solve_tool = function_tool(_symbolic_solve)
+symbolic_solve_tool["name"] = "symbolic_solve_tool"

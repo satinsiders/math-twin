@@ -116,5 +116,5 @@ def _render_graph(spec_json: str) -> str:
     plt.close(fig)
     return str(png_path)
 
-
 render_graph_tool = function_tool(_render_graph)
+render_graph_tool["name"] = "render_graph_tool"

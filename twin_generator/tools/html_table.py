@@ -22,5 +22,5 @@ def _make_html_table(table_json: str) -> str:
     )
     return f"<table><thead><tr>{head_html}</tr></thead><tbody>{rows_html}</tbody></table>"
 
-
 make_html_table_tool = function_tool(_make_html_table)
+make_html_table_tool["name"] = "make_html_table_tool"
