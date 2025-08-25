@@ -182,3 +182,38 @@ def validate_output(block: dict[str, Any]) -> dict[str, Any]:
 
     block["errors"] = errors
     return block
+
+
+# ---------------------------------------------------------------------------
+# Graph helpers
+# ---------------------------------------------------------------------------
+
+
+def _normalize_graph_points(spec: dict[str, Any]) -> None:
+    """In-place normalization of graph spec "points" values.
+
+    Accepts a specification dictionary that may contain a ``"points"`` key with
+    a list of coordinate pairs. Coordinates expressed as dictionaries with
+    ``X``/``Y`` or ``x``/``y`` keys are coerced to ``[x, y]`` lists with ``float``
+    values. Any non-conforming entries are left untouched.
+    """
+
+    points = spec.get("points")
+    if not isinstance(points, list):
+        return
+
+    normalized: list[Any] = []
+    for pt in points:
+        if isinstance(pt, dict) and (
+            ("X" in pt and "Y" in pt) or ("x" in pt and "y" in pt)
+        ):
+            x = pt.get("X", pt.get("x"))
+            y = pt.get("Y", pt.get("y"))
+            if x is None or y is None:
+                normalized.append(pt)
+            else:
+                normalized.append([float(x), float(y)])
+        else:
+            normalized.append(pt)
+
+    spec["points"] = normalized
