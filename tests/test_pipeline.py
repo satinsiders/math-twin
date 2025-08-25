@@ -738,3 +738,36 @@ def test_qa_detects_missing_asset(monkeypatch: pytest.MonkeyPatch) -> None:
     assert out.error == "QA failed for format: missing asset"
     assert call_counts.get("QAAgent") == 2
 
+
+def test_qa_accepts_missing_assets(monkeypatch: pytest.MonkeyPatch) -> None:
+    call_counts: dict[str, int] = {}
+
+    def mock_run_sync(agent: Any, input: Any, tools: Any | None = None) -> SimpleNamespace:
+        name = agent.name
+        call_counts[name] = call_counts.get(name, 0) + 1
+        if name == "QAAgent":
+            payload = json.loads(input)
+            data = payload["data"]
+            tool_map = {t["name"]: t for t in (tools or [])}
+            ok = tool_map["_check_asset"]["_func"](
+                data.get("graph_path"), data.get("table_html")
+            )
+            return SimpleNamespace(final_output="pass" if ok else "missing asset")
+        raise AssertionError("unexpected agent")
+
+    monkeypatch.setattr(pipeline.AgentsRunner, "run_sync", mock_run_sync)
+
+    def _step_format(state: PipelineState) -> PipelineState:
+        state.twin_stem = "Q"
+        state.choices = [1]
+        state.answer_index = 0
+        state.answer_value = 1
+        state.rationale = "r"
+        # No graph_path or table_html provided
+        return state
+
+    runner = pipeline._Runner(pipeline._Graph([_step_format]), qa_max_retries=2)
+    out = runner.run(PipelineState())
+    assert out.error is None
+    assert call_counts.get("QAAgent") == 1
+
