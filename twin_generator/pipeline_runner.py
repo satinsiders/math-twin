@@ -81,18 +81,20 @@ class _Runner:
             return False, qa_out
         try:
             qa_res = AgentsRunner.run_sync(QAAgent, input=qa_in, tools=_QA_TOOLS)
-            qa_out = get_final_output(qa_res).strip().lower()
+            qa_raw = get_final_output(qa_res)
         except Exception as exc:  # pragma: no cover - defensive
             raise RuntimeError(f"QAAgent failed: {exc}")
+        qa_out = qa_raw.strip()
+        qa_lower = qa_out.lower()
         self.logger.info(
             "[twin-generator] step %d/%d: %s QA round %d: %s",
             idx + 1,
             total_steps,
             name,
             attempts + 1,
-            qa_out,
+            qa_out or "(empty response)",
         )
-        return qa_out == "pass", qa_out
+        return qa_lower == "pass", qa_out
 
     def run(self, inputs: PipelineState) -> PipelineState:
         data = copy.deepcopy(inputs)

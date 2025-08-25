@@ -3,6 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any, cast
 import json
+import logging
 
 import sys
 from pathlib import Path
@@ -315,6 +316,26 @@ def test_generate_twin_qa_retry_limit(monkeypatch: pytest.MonkeyPatch) -> None:
     assert out.error == "QA failed for parse: fail"
     assert call_counts.get("ParserAgent") == 5
     assert call_counts.get("QAAgent") == 5
+
+
+def test_generate_twin_logs_qa_failure(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+    """QA failure should surface the agent's message in logs."""
+    def mock_run_sync(agent: Any, input: Any, tools: Any | None = None) -> SimpleNamespace:
+        name = agent.name
+        if name == "ParserAgent":
+            return SimpleNamespace(final_output="{}")
+        if name == "QAAgent":
+            return _qa_response("fail: bad output", tools)
+        raise AssertionError("unexpected agent")
+
+    monkeypatch.setattr(pipeline.AgentsRunner, "run_sync", mock_run_sync)
+
+    with caplog.at_level("INFO"):
+        logging.getLogger("twin_generator.pipeline_runner").addHandler(caplog.handler)
+        out = pipeline.generate_twin("p", "s", verbose=True)
+
+    assert out.error == "QA failed for parse: fail: bad output"
+    assert "QA round 1: fail: bad output" in caplog.text
 
 
 def test_step_visual_handles_non_dict() -> None:
