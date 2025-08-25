@@ -297,6 +297,30 @@ def test_generate_twin_qa_retry(monkeypatch: pytest.MonkeyPatch) -> None:
     assert call_counts.get("QAAgent") == 10
 
 
+def test_qa_feedback_passed_to_agent(monkeypatch: pytest.MonkeyPatch) -> None:
+    inputs: list[str] = []
+    qa_calls = 0
+
+    def mock_run_sync(agent: Any, input: Any, tools: Any | None = None) -> SimpleNamespace:
+        nonlocal qa_calls
+        if agent.name == "ParserAgent":
+            inputs.append(input)
+            return SimpleNamespace(final_output="{}")
+        if agent.name == "QAAgent":
+            qa_calls += 1
+            return _qa_response("needs work" if qa_calls == 1 else "pass", tools)
+        raise AssertionError("unexpected agent")
+
+    monkeypatch.setattr(pipeline.AgentsRunner, "run_sync", mock_run_sync)
+
+    runner = pipeline._Runner(pipeline._Graph([pipeline._step_parse]), qa_max_retries=2)
+    out = runner.run(PipelineState(problem_text="p", solution="s"))
+    assert out.error is None
+    assert len(inputs) == 2
+    assert "needs work" not in inputs[0]
+    assert "needs work" in inputs[1]
+
+
 def test_generate_twin_qa_retry_limit(monkeypatch: pytest.MonkeyPatch) -> None:
     """generate_twin should surface an error after exceeding QA retry limit."""
     call_counts: dict[str, int] = {}

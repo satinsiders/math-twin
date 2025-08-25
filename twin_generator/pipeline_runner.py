@@ -86,6 +86,7 @@ class _Runner:
             raise RuntimeError(f"QAAgent failed: {exc}")
         qa_out = qa_raw.strip()
         qa_lower = qa_out.lower()
+        data.qa_feedback = qa_out
         self.logger.info(
             "[twin-generator] step %d/%d: %s QA round %d: %s",
             idx + 1,
@@ -118,6 +119,7 @@ class _Runner:
                 if skip_qa:
                     if next_steps:
                         steps[idx + 1 : idx + 1] = next_steps
+                    data.qa_feedback = None
                     break
                 from . import pipeline as pipeline_module
                 json_required = name in pipeline_module._JSON_STEPS
@@ -129,6 +131,7 @@ class _Runner:
                     data.error = str(exc)
                     return data
                 if passed:
+                    data.qa_feedback = None
                     if next_steps:
                         steps[idx + 1 : idx + 1] = next_steps
                     break
@@ -139,6 +142,8 @@ class _Runner:
                 ):
                     data.error = f"QA failed for {name}: {qa_out}"
                     return data
+                before.qa_feedback = data.qa_feedback
                 data = before
             idx += 1
+        data.qa_feedback = None
         return data

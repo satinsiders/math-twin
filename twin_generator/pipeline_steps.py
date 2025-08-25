@@ -34,7 +34,9 @@ def _step_parse(state: PipelineState) -> PipelineState:
         state.problem_text + "\n" + state.solution,
         tools=_TOOLS,
         max_retries=1,
+        qa_feedback=state.qa_feedback,
     )
+    state.qa_feedback = None
     if err:
         state.error = err
         return state
@@ -44,8 +46,13 @@ def _step_parse(state: PipelineState) -> PipelineState:
 
 def _step_concept(state: PipelineState) -> PipelineState:
     out, err = invoke_agent(
-        ConceptAgent, str(state.parsed), tools=_TOOLS, expect_json=False
+        ConceptAgent,
+        str(state.parsed),
+        tools=_TOOLS,
+        expect_json=False,
+        qa_feedback=state.qa_feedback,
     )
+    state.qa_feedback = None
     if err:
         state.error = err
         return state
@@ -60,7 +67,9 @@ def _step_template(state: PipelineState) -> PipelineState:
         payload,
         tools=_TEMPLATE_TOOLS,
         max_retries=_TEMPLATE_MAX_RETRIES,
+        qa_feedback=state.qa_feedback,
     )
+    state.qa_feedback = None
     if err:
         state.error = err
         return state
@@ -70,8 +79,12 @@ def _step_template(state: PipelineState) -> PipelineState:
 
 def _step_sample(state: PipelineState) -> PipelineState:
     out, err = invoke_agent(
-        SampleAgent, json.dumps({"template": state.template}), tools=_TOOLS
+        SampleAgent,
+        json.dumps({"template": state.template}),
+        tools=_TOOLS,
+        qa_feedback=state.qa_feedback,
     )
+    state.qa_feedback = None
     if err:
         state.error = err
         return state
@@ -85,8 +98,13 @@ def _step_sample(state: PipelineState) -> PipelineState:
 def _step_symbolic(state: PipelineState) -> PipelineState:
     payload = json.dumps({"template": state.template, "params": state.params})
     sol, err = invoke_agent(
-        SymbolicSolveAgent, payload, tools=_TOOLS, expect_json=False
+        SymbolicSolveAgent,
+        payload,
+        tools=_TOOLS,
+        expect_json=False,
+        qa_feedback=state.qa_feedback,
     )
+    state.qa_feedback = None
     if err:
         state.symbolic_error = err.replace("SymbolicSolveAgent", "Symbolic agents")
         return state
@@ -135,7 +153,10 @@ def _step_operations(state: PipelineState) -> PipelineState:
             data[field] = val
 
     payload = json.dumps({"data": data, "operations": ops})
-    out, err = invoke_agent(OperationsAgent, payload, tools=_TOOLS)
+    out, err = invoke_agent(
+        OperationsAgent, payload, tools=_TOOLS, qa_feedback=state.qa_feedback
+    )
+    state.qa_feedback = None
     if err:
         state.error = err
         return state
@@ -233,7 +254,13 @@ def _step_stem_choice(state: PipelineState) -> PipelineState:
     if state.table_html:
         payload["table_html"] = state.table_html
 
-    out, err = invoke_agent(StemChoiceAgent, json.dumps(payload), tools=_TOOLS)
+    out, err = invoke_agent(
+        StemChoiceAgent,
+        json.dumps(payload),
+        tools=_TOOLS,
+        qa_feedback=state.qa_feedback,
+    )
+    state.qa_feedback = None
     if err:
         state.error = err
         return state
@@ -255,7 +282,13 @@ def _step_format(state: PipelineState) -> PipelineState:
     if state.table_html:
         payload["table_html"] = state.table_html
 
-    out, err = invoke_agent(FormatterAgent, json.dumps(payload), tools=_TOOLS)
+    out, err = invoke_agent(
+        FormatterAgent,
+        json.dumps(payload),
+        tools=_TOOLS,
+        qa_feedback=state.qa_feedback,
+    )
+    state.qa_feedback = None
     if err:
         state.error = err
         return state

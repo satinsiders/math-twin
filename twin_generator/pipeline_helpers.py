@@ -1,6 +1,7 @@
 """Shared helpers and constants for the twin generator pipeline."""
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from agents.run import Runner as AgentsRunner  # type: ignore
@@ -74,6 +75,7 @@ def invoke_agent(
     tools: list[Any] | None = None,
     expect_json: bool = True,
     max_retries: int = _JSON_MAX_RETRIES,
+    qa_feedback: str | None = None,
 ) -> tuple[Any | None, str | None]:
     """Run an agent and parse its output.
 
@@ -83,6 +85,20 @@ def invoke_agent(
     """
     agent_name = getattr(agent, "name", getattr(agent, "__name__", str(agent)))
     attempts = 0
+    if qa_feedback:
+        try:
+            parsed_payload = json.loads(payload)
+        except Exception:
+            payload = payload + f"\n\nQA feedback:\n{qa_feedback}"
+        else:
+            if isinstance(parsed_payload, dict):
+                parsed_payload["qa_feedback"] = qa_feedback
+                payload = json.dumps(parsed_payload)
+            else:
+                payload = json.dumps(
+                    {"data": parsed_payload, "qa_feedback": qa_feedback}
+                )
+
     while True:
         try:
             res = AgentsRunner.run_sync(agent, input=payload, tools=tools)

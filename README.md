@@ -29,6 +29,11 @@ Generate SAT-style "twin" math problems from a reference problem and official so
 - **FormatterAgent** – produce the final minified JSON payload.
 - **QAAgent** – validate JSON formatting and internal consistency.
 
+If QA detects a problem, the runner records the agent's message and feeds it
+back into the next attempt.  The feedback text is appended to subsequent
+prompts or included as a ``qa_feedback`` field in JSON payloads so agents can
+correct mistakes on retry.
+
 Optional agents such as **SymbolicSolveAgent** and **SymbolicSimplifyAgent** handle heavy symbolic manipulation when required.
 
 ## Installation

@@ -41,6 +41,9 @@ class PipelineState:
     error: str | None = None
     extras: dict[str, Any] = field(default_factory=dict)
 
+    # QA feedback from failed checks
+    qa_feedback: str | None = None
+
     # Runner metadata
     skip_qa: bool = False
     next_steps: list[Callable[["PipelineState"], "PipelineState"]] | None = None
