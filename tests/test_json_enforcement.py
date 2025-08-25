@@ -16,7 +16,7 @@ import twin_generator.pipeline as pipeline  # noqa: E402
 def _qa_response(out: str, tools: Any | None) -> SimpleNamespace:
     """Simulate QAAgent using tools before returning *out*."""
     tool_map = {t["name"]: t for t in (tools or [])}
-    func = tool_map.get("_sanitize_params_tool", {}).get("_func")
+    func = tool_map.get("sanitize_params_tool", {}).get("_func")
     if func:
         func("{}")
     return SimpleNamespace(final_output=out)

@@ -146,5 +146,5 @@ def _calc_answer(expression: str, params_json: str) -> Any:  # noqa: ANN401 â€“Â
     except Exception:
         raise ValueError(error_msg)
 
-
 calc_answer_tool = function_tool(_calc_answer)
+calc_answer_tool["name"] = "calc_answer_tool"

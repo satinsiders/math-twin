@@ -29,6 +29,7 @@ def _sanitize_params_tool(params_json: str) -> dict[str, Any]:
 
 
 sanitize_params_tool = function_tool(_sanitize_params_tool)
+sanitize_params_tool["name"] = "sanitize_params_tool"
 
 
 def _validate_output_tool(block_json: str) -> dict[str, Any]:
@@ -39,6 +40,7 @@ def _validate_output_tool(block_json: str) -> dict[str, Any]:
 
 
 validate_output_tool = function_tool(_validate_output_tool)
+validate_output_tool["name"] = "validate_output_tool"
 
 
 def _check_asset(graph_path: str | None = None, table_html: str | None = None) -> bool:
@@ -51,3 +53,4 @@ def _check_asset(graph_path: str | None = None, table_html: str | None = None) -
 
 
 check_asset_tool = function_tool(_check_asset)
+check_asset_tool["name"] = "check_asset_tool"
