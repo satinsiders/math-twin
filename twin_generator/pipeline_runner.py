@@ -83,7 +83,17 @@ class _Runner:
             qa_res = AgentsRunner.run_sync(QAAgent, input=qa_in, tools=_QA_TOOLS)
             qa_raw = get_final_output(qa_res)
         except Exception as exc:  # pragma: no cover - defensive
-            raise RuntimeError(f"QAAgent failed: {exc}")
+            qa_out = str(exc)
+            data.qa_feedback = qa_out
+            self.logger.info(
+                "[twin-generator] step %d/%d: %s QA round %d: %s",
+                idx + 1,
+                total_steps,
+                name,
+                attempts + 1,
+                qa_out,
+            )
+            return False, qa_out
         qa_out = qa_raw.strip()
         qa_lower = qa_out.lower()
         data.qa_feedback = qa_out
