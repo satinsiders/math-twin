@@ -1,6 +1,6 @@
 """Package‑wide constants and demo assets."""
 
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
 
 class GraphSpec(TypedDict):
@@ -8,7 +8,7 @@ class GraphSpec(TypedDict):
 
     points: list[list[float]]
     style: str
-    title: str
+    title: NotRequired[str]
 
 
 _DEMO_PROBLEM = """If 3x + 2 = 17, what is the value of x?"""

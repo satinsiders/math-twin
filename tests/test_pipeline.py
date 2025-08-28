@@ -402,6 +402,15 @@ def test_step_visual_accepts_point_formats(points: list[Any]) -> None:
     Path(out.graph_path).unlink(missing_ok=True)
 
 
+def test_step_visual_handles_spec_without_title() -> None:
+    spec: GraphSpec = {"points": [[0, 0], [1, 1]], "style": "line"}
+    state = PipelineState(template={"visual": {"type": "graph", "data": spec}})
+    out = pipeline._step_visual(state)
+    assert out.error is None
+    assert out.graph_path and Path(out.graph_path).is_file()
+    Path(out.graph_path).unlink(missing_ok=True)
+
+
 def test_step_visual_renders_table() -> None:
     visual = {"type": "table", "data": {"header": ["A"], "rows": [[1], [2]]}}
     state = PipelineState(template={"visual": visual})
