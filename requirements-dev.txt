@@ -3,3 +3,4 @@ mypy
 pre-commit
 sympy
 json5
+openai
