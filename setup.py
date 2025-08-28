@@ -13,6 +13,7 @@ setup(
         "pillow",
         "numpy",
         "python-dotenv",
+        "openai",
         "openai-agents",
     ],
     entry_points={

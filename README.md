@@ -38,7 +38,7 @@ Optional agents such as **SymbolicSolveAgent** and **SymbolicSimplifyAgent** han
 
 ## Installation
 
-This project requires **Python 3.12+**. Install in editable mode with development dependencies:
+This project requires **Python 3.12+** and the official `openai` package. Install in editable mode with development dependencies:
 
 ```bash
 pip install -e .
