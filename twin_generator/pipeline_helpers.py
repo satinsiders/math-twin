@@ -11,7 +11,6 @@ from .tools.graph import render_graph_tool
 from .tools.html_table import make_html_table_tool
 from .tools.symbolic_solve import symbolic_solve_tool
 from .tools.qa_tools import (
-    _check_asset,
     check_asset_tool,
     sanitize_params_tool,
     validate_output_tool,
@@ -45,7 +44,6 @@ _QA_TOOLS = [
     sanitize_params_tool,
     validate_output_tool,
     check_asset_tool,
-    {"name": "_check_asset", "_func": _check_asset},
 ]
 _TEMPLATE_TOOLS = [calc_answer_tool]
 _TEMPLATE_MAX_RETRIES = 3

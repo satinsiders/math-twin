@@ -802,7 +802,7 @@ def test_qa_accepts_missing_assets(monkeypatch: pytest.MonkeyPatch) -> None:
             payload = json.loads(input)
             data = payload["data"]
             tool_map = {t["name"]: t for t in (tools or [])}
-            ok = tool_map["_check_asset"]["_func"](
+            ok = tool_map["check_asset_tool"]["_func"](
                 data.get("graph_path"), data.get("table_html")
             )
             return SimpleNamespace(final_output="pass" if ok else "missing asset")
