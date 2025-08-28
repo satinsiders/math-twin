@@ -13,34 +13,36 @@ from agents.tool import function_tool
 __all__ = ["render_graph_tool", "_render_graph"]
 
 
-def _select_matplotlib_backend() -> None:
-    """Choose a usable Matplotlib backend once at import time."""
-    import matplotlib  # type: ignore
-
-    backend = matplotlib.get_backend().lower()
-    if backend in {"agg", "tkagg"}:  # already configured
-        return
-
-    env_backend = os.environ.get("MPLBACKEND", "").lower()
-    prefer_tk = bool(os.environ.get("DISPLAY")) or env_backend == "tkagg"
-    if prefer_tk:
-        try:
-            matplotlib.use("TkAgg")
-            return
-        except Exception as exc:  # pragma: no cover - depends on system backend
-            warnings.warn(
-                f"Preferred GUI backend 'TkAgg' unavailable; falling back to 'Agg': {exc}",
-                RuntimeWarning,
-            )
-    matplotlib.use("Agg")
-
-
-_select_matplotlib_backend()
-
-
 def _render_graph(spec_json: str) -> str:
     """Render a graph to a **PNG file** and return the file path (string)."""
-    import matplotlib.pyplot as plt  # type: ignore
+    # Lazy import so the package works without matplotlib unless a graph is requested
+    try:
+        import matplotlib  # type: ignore
+        import matplotlib.pyplot as plt  # type: ignore
+    except Exception as exc:  # pragma: no cover - environment-dependent
+        raise RuntimeError(
+            "matplotlib is required to render graphs. Install it or run without visuals."
+        ) from exc
+
+    # Select a usable backend on demand
+    try:
+        backend = matplotlib.get_backend().lower()
+    except Exception:
+        backend = ""
+    if backend not in {"agg", "tkagg"}:
+        env_backend = os.environ.get("MPLBACKEND", "").lower()
+        prefer_tk = bool(os.environ.get("DISPLAY")) or env_backend == "tkagg"
+        if prefer_tk:
+            try:
+                matplotlib.use("TkAgg")
+            except Exception as exc:  # pragma: no cover - depends on system backend
+                warnings.warn(
+                    f"Preferred GUI backend 'TkAgg' unavailable; falling back to 'Agg': {exc}",
+                    RuntimeWarning,
+                )
+                matplotlib.use("Agg")
+        else:
+            matplotlib.use("Agg")
 
     spec = json.loads(spec_json)
     raw_points: list[Any] = spec.get("points", [])

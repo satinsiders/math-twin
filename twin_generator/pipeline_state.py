@@ -15,6 +15,8 @@ class PipelineState:
     solution: str = ""
     force_graph: bool = False
     graph_spec: GraphSpec | None = None
+    # Optional external image URL for analysis/usage
+    graph_url: str | None = None
 
     # Intermediate results
     parsed: dict[str, Any] | None = None
@@ -26,6 +28,8 @@ class PipelineState:
     symbolic_error: str | None = None
     graph_path: str | None = None
     table_html: str | None = None
+    # Results from analyzing an input graph image (if provided)
+    graph_analysis: dict[str, Any] | None = None
     answer: Any | None = None
     stem_data: dict[str, Any] | None = None
 

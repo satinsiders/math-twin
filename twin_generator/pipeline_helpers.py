@@ -10,10 +10,19 @@ from .tools.calc import calc_answer_tool
 from .tools.graph import render_graph_tool
 from .tools.html_table import make_html_table_tool
 from .tools.symbolic_solve import symbolic_solve_tool
+from .tools.graph_analysis import sample_function_points_tool, fit_function_tool
 from .tools.qa_tools import (
     check_asset_tool,
+    validate_answer_ref_tool,
+    graph_consistency_tool,
     sanitize_params_tool,
     validate_output_tool,
+    detect_degenerate_params_tool,
+    count_concept_steps_tool,
+    check_invariants_tool,
+    choices_truth_filter_tool,
+    rationale_grounding_tool,
+    stem_number_grounding_tool,
 )
 from .utils import get_final_output, safe_json
 
@@ -36,6 +45,8 @@ _TOOLS = [
     render_graph_tool,
     make_html_table_tool,
     symbolic_solve_tool,
+    sample_function_points_tool,
+    fit_function_tool,
 ]
 
 # QAAgent also needs sanitization and output validation helpers.
@@ -44,6 +55,14 @@ _QA_TOOLS = [
     sanitize_params_tool,
     validate_output_tool,
     check_asset_tool,
+    validate_answer_ref_tool,
+    graph_consistency_tool,
+    detect_degenerate_params_tool,
+    count_concept_steps_tool,
+    check_invariants_tool,
+    choices_truth_filter_tool,
+    rationale_grounding_tool,
+    stem_number_grounding_tool,
 ]
 _TEMPLATE_TOOLS = [calc_answer_tool]
 _TEMPLATE_MAX_RETRIES = 3

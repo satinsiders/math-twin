@@ -15,6 +15,8 @@ from .agents import (
     TemplateAgent,
     SymbolicSolveAgent,
     SymbolicSimplifyAgent,
+    # New
+    GraphVisionAgent,
 )
 from .pipeline_helpers import (
     _TOOLS,
@@ -30,9 +32,11 @@ from .pipeline_state import PipelineState
 
 
 def _step_parse(state: PipelineState) -> PipelineState:
+    # Provide explicit section markers to help the parser separate inputs
+    parser_input = f"Problem:\n{state.problem_text}\n\nSolution:\n{state.solution}"
     out, err = invoke_agent(
         ParserAgent,
-        state.problem_text + "\n" + state.solution,
+        parser_input,
         tools=_TOOLS,
         max_retries=1,
         qa_feedback=state.qa_feedback,
@@ -62,7 +66,12 @@ def _step_concept(state: PipelineState) -> PipelineState:
 
 
 def _step_template(state: PipelineState) -> PipelineState:
-    payload = json.dumps({"parsed": state.parsed, "concept": state.concept})
+    payload = json.dumps({
+        "parsed": state.parsed,
+        "concept": state.concept,
+        # Provide any graph analysis so the template can bind params/ops to visuals
+        "graph_analysis": state.graph_analysis,
+    })
     out, err = invoke_agent(
         TemplateAgent,
         payload,
@@ -215,7 +224,15 @@ def _step_visual(state: PipelineState) -> PipelineState:
         visual = {"type": "none"}
 
     spec = _select_graph_spec(visual, state.graph_spec, bool(state.force_graph))
+    # If an external URL is provided and no spec is requested, prefer direct URL
+    if spec is None and state.graph_url:
+        # Use the external image as-is; QA will allow URLs
+        state.graph_path = state.graph_url
+        return state
+
     if spec is not None:
+        # Allow spec values to reference state/extras keys (e.g., "points": "graph_points")
+        spec = _resolve_refs(spec, state)
         if isinstance(spec, dict):
             if state.force_graph and not spec.get("points"):
                 spec["points"] = C.DEFAULT_GRAPH_SPEC.get("points", [])
@@ -233,8 +250,34 @@ def _step_visual(state: PipelineState) -> PipelineState:
 
 
 def _step_answer(state: PipelineState) -> PipelineState:
-    expr = state.template.get("answer_expression", "0") if isinstance(state.template, dict) else "0"
-    state.answer = _calc_answer(expr, json.dumps(state.params))
+    expr = (
+        state.template.get("answer_expression", "0")
+        if isinstance(state.template, dict)
+        else "0"
+    )
+    try:
+        state.answer = _calc_answer(expr, json.dumps(state.params))
+    except Exception as exc:
+        # Fallback: if expr is a key in params, use its value (string expression)
+        fallback: Any = None
+        if isinstance(expr, str) and isinstance(state.params, dict) and expr in state.params:
+            fallback = state.params.get(expr)
+        if fallback is not None:
+            state.answer = fallback
+        else:
+            # Non-fatal: some question types (e.g., equation selection) don't yield a numeric answer.
+            state.answer = None
+            try:
+                state.extras["computed_value_error"] = str(exc)
+            except Exception:
+                pass
+    # Preserve the computed numeric answer separately for sanity checks/visuals
+    try:
+        if state.answer is not None:
+            state.extras["computed_value"] = state.answer
+    except Exception:
+        # Be resilient if extras isn't a dict for any reason
+        pass
     return state
 
 
@@ -258,19 +301,24 @@ def _step_stem_choice(state: PipelineState) -> PipelineState:
     if err:
         state.error = err
         return state
+    if not isinstance(out, dict):
+        state.error = "StemChoiceAgent produced non-dict output"
+        return state
     state.stem_data = out
     return state
 
 
 def _step_format(state: PipelineState) -> PipelineState:
-    answer_value = str(state.answer)
-
     payload: dict[str, Any] = {
         "twin_stem": state.stem_data.get("twin_stem") if state.stem_data else None,
         "choices": state.stem_data.get("choices") if state.stem_data else None,
-        "answer_value": answer_value,
         "rationale": state.stem_data.get("rationale") if state.stem_data else None,
     }
+    # Provide the computed value as a non-graded hint only; the formatter
+    # is responsible for selecting the correct choice and emitting
+    # answer_index/answer_value that match the choices.
+    if state.answer is not None:
+        payload["computed_value"] = state.answer
     if state.graph_path:
         payload["graph_path"] = state.graph_path
     if state.table_html:
@@ -302,4 +350,70 @@ def _step_format(state: PipelineState) -> PipelineState:
     state.errors = out_dict.get("errors")
     state.graph_path = out_dict.get("graph_path", state.graph_path)
     state.table_html = out_dict.get("table_html", state.table_html)
+    return state
+
+
+def _resolve_refs(obj: Any, state: PipelineState) -> Any:  # noqa: ANN401 - generic
+    """Recursively replace string tokens that refer to state/extras keys.
+
+    Any string value equal to the name of a PipelineState attribute or an
+    ``extras`` key is replaced by that value. Other values are returned
+    unchanged. Lists and dicts are processed recursively.
+    """
+    if isinstance(obj, str):
+        if hasattr(state, obj):
+            return getattr(state, obj)
+        if isinstance(state.extras, dict) and obj in state.extras:
+            return state.extras[obj]
+        return obj
+    if isinstance(obj, list):
+        return [_resolve_refs(x, state) for x in obj]
+    if isinstance(obj, dict):
+        return {k: _resolve_refs(v, state) for k, v in obj.items()}
+    return obj
+
+
+def _step_graph_analyze(state: PipelineState) -> PipelineState:
+    """Analyze an external graph image URL if provided.
+
+    Stores a structured JSON in ``state.graph_analysis`` with best-effort
+    extraction of points, axes, and inferred function details. If unavailable
+    or if analysis fails, the step is a no-op.
+    """
+    if not state.graph_url:
+        # No external image to analyze; skip QA for this no-op step
+        state.skip_qa = True
+        return state
+    payload: dict[str, Any] = {
+        "graph_url": state.graph_url,
+        "problem": state.problem_text,
+        "solution": state.solution,
+    }
+    if state.parsed is not None:
+        payload["parsed"] = state.parsed
+    out, err = invoke_agent(
+        GraphVisionAgent,
+        json.dumps(payload),
+        tools=None,
+        qa_feedback=state.qa_feedback,
+    )
+    state.qa_feedback = None
+    if err:
+        # Non-fatal; keep going without analysis
+        state.extras["graph_analysis_error"] = err
+        state.skip_qa = True
+        return state
+    if isinstance(out, dict):
+        state.graph_analysis = out
+        # Convenience: expose common fields for operations/templates
+        try:
+            series = out.get("series") or []
+            if series and isinstance(series, list) and isinstance(series[0], dict):
+                pts = series[0].get("points")
+                if isinstance(pts, list):
+                    state.extras.setdefault("observed_points", pts)
+        except Exception:
+            pass
+    # Analysis is advisory; do not block pipeline on QA for this step
+    state.skip_qa = True
     return state

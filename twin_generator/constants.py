@@ -1,14 +1,14 @@
 """Package‑wide constants and demo assets."""
 
-from typing import NotRequired, TypedDict
+from typing import TypedDict
 
 
-class GraphSpec(TypedDict):
+class GraphSpec(TypedDict, total=False):
     """Dictionary describing a simple graph specification."""
 
     points: list[list[float]]
     style: str
-    title: NotRequired[str]
+    title: str
 
 
 _DEMO_PROBLEM = """If 3x + 2 = 17, what is the value of x?"""

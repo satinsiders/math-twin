@@ -10,11 +10,12 @@ Generate SAT-style "twin" math problems from a reference problem and official so
 4. [Command Line Interface](#command-line-interface)
 5. [Python API](#python-api)
 6. [Pipeline Overview](#pipeline-overview)
-7. [Output Format](#output-format)
-8. [Extending the System](#extending-the-system)
-9. [Development](#development)
-10. [Project Layout](#project-layout)
-11. [Contributing](#contributing)
+7. [Agents, Tools, and Pipeline Logic](#agents-tools-and-pipeline-logic)
+8. [Output Format](#output-format)
+9. [Extending the System](#extending-the-system)
+10. [Development](#development)
+11. [Project Layout](#project-layout)
+12. [Contributing](#contributing)
 
 ## Overview
 
@@ -38,7 +39,7 @@ Optional agents such as **SymbolicSolveAgent** and **SymbolicSimplifyAgent** han
 
 ## Installation
 
-This project requires **Python 3.12+** and the official `openai` package. Install in editable mode with development dependencies:
+This project requires **Python 3.10+** and the official `openai` package. Install in editable mode with development dependencies:
 
 ```bash
 pip install -e .
@@ -52,7 +53,7 @@ pip install -r requirements-dev.txt
 
 ## Quick Start
 
-Set your OpenAI API key and invoke the demo generator:
+Set your OpenAI API key and invoke the demo generator (only needed when actually calling the remote model; running tests does not require a key):
 
 ```bash
 export OPENAI_API_KEY=your-key-here
@@ -63,7 +64,22 @@ Use `--graph-demo` to generate a problem that includes a graph visual. Append `-
 
 ## Command Line Interface
 
-The CLI wrapper lives at `twin_generator/cli.py` and mirrors the Python API. Key options include:
+The CLI wrapper lives at `twin_generator/cli.py` and mirrors the Python API. You can now run in two ways: a single flexible prompt or explicit file flags.
+
+Flexible single-argument prompt (quoted):
+
+```bash
+python -m twin_generator.cli "A line passes through (0,-1),(1,1),(2,3). Which equation fits? Solution: slope=2, intercept=-1. https://example.com/graph.png"
+```
+
+Notes for prompt mode:
+- Pass plain text; optionally include a `Solution:` or `Answer:` section to seed parsing.
+- Include an image URL (e.g., to a graph) to enable vision analysis.
+- Provide a JSON object instead of text for explicit control, e.g. `{"problem":"...","solution":"...","graph_url":"..."}`.
+- If the prompt points to a file path, the file is read. `.json` files are parsed for the same keys.
+- An empty quoted prompt `""` defaults to the demo problem.
+
+Explicit flags (backward compatible):
 
 | Flag | Description |
 | ---- | ----------- |
@@ -72,8 +88,14 @@ The CLI wrapper lives at `twin_generator/cli.py` and mirrors the Python API. Key
 | `--demo` | Run a trivial built‑in demo problem. |
 | `--graph-demo` | Run the demo that produces a graph. |
 | `--out PATH` | Write the resulting JSON to a file instead of stdout. |
+| `--twin-only` | Print only the final twin problem (stem + choices + answer + rationale) to stdout. Use `--out` to save the full JSON. |
 | `--preview` | Display the generated graph image if present. |
 | `--log-level LEVEL` | One of `WARNING`, `INFO`, or `DEBUG`. |
+
+Notes:
+- In prompt mode, do not combine the positional prompt with `--problem/--solution/--demo/--graph-demo`.
+- You can pass `-` to `--problem` or `--solution` to read that input from stdin (not both at once).
+- `--demo`/`--graph-demo` cannot be combined with `--problem`/`--solution`.
 
 Example invocation with your own files:
 
@@ -109,6 +131,69 @@ The default pipeline performs the following high‑level operations:
 6. Draft the final stem and answer choices.
 7. Minify and validate the JSON payload.
 8. Optionally preview or persist any generated visuals.
+
+## Agents, Tools, and Pipeline Logic
+
+This section summarizes each agent and tool, and explains how the step runner orchestrates them.
+
+### Agents
+
+- ParserAgent: Extracts variables, relations, constraints, expected answer form, and basic difficulty/complexity features from the source problem + solution.
+- ConceptAgent: Summarizes the core concept and a canonical solution path as numbered steps.
+- TemplateAgent: Produces a structured template with symbolic parameters, their domains, an `answer_expression`, optional `operations`, and optional `visual` config; prompts are tuned to preserve original difficulty.
+- SampleAgent: Samples concrete parameter values that satisfy domains while avoiding degeneracy (e.g., 0/±1 coefficients that trivialize steps, perfect squares where they collapse radicals).
+- SymbolicSolveAgent: Solves the instantiated relation/expression exactly (SymPy‑readable) for variables required by `answer_expression`.
+- SymbolicSimplifyAgent: Simplifies a SymPy expression deterministically without unsafe algebraic assumptions.
+- OperationsAgent: Executes sequential operations, each optionally calling a named tool or evaluating a simple expression; writes outputs back into the state.
+- GraphVisionAgent: When a `graph_url` is provided, extracts series points/axes/best‑fit hints from an external image to assist template/operations.
+- StemChoiceAgent: Crafts the SAT‑style twin stem and plausible distractors at matched difficulty.
+- FormatterAgent: Emits the final minified JSON with `twin_stem`, `choices`, `answer_index`, `answer_value`, and `rationale` (plus any assets).
+- QAAgent: Validates each step (format, consistency, assets, answer references, parameter degeneracy) and returns `pass` or a concise failure reason. Failing feedback is fed into the next attempt.
+
+Agent definitions live in `twin_generator/agents.py`. Vision and accuracy‑critical agents are tagged with higher reasoning effort where helpful.
+
+### Tools
+
+Core tools (available to most agents):
+- calc_answer_tool: Evaluate a SymPy expression under parameters; prefers exact simplification, falls back to numeric.
+- render_graph_tool: Render a JSON graph spec (points/style/title) to a PNG file and return the path.
+- make_html_table_tool: Convert a JSON table spec into an escaped HTML `<table>` string.
+- symbolic_solve_tool: Solve symbolic equations exactly and return simplified solutions as JSON.
+- sample_function_points_tool: Sample `[x,y]` points from an analytic function of `x` with optional params/range.
+- fit_function_tool: Fit function families (polynomial, exponential, log, power, trig) to observed points; returns best equation, parameters, and suggested points.
+
+QA‑focused tools (used by QAAgent):
+- sanitize_params_tool: Keep only numeric‑coercible params (SymPy), reporting skipped keys.
+- validate_output_tool: Coerce/validate the formatter block (`twin_stem`, `choices`, `answer_index`, `answer_value`, assets).
+- check_asset_tool: Verify a local `graph_path` exists or `table_html` is non‑empty; remote URLs are accepted.
+- graph_consistency_tool: Best‑effort pixel‑difference check that a local graph image matches provided points (degrades gracefully without optional deps).
+- validate_answer_ref_tool: Ensure `answer_expression` is numeric‑like or references a known param/operation output by identifier.
+- detect_degenerate_params_tool: Flag parameter assignments that likely trivialize difficulty (0/±1, perfect‑square discriminants, radicals collapsing, etc.).
+- count_concept_steps_tool: Count numbered lines in ConceptAgent output to approximate step depth.
+- choices_truth_filter_tool: Ensure only one choice matches the computed answer; flags duplicate-correct distractors.
+- rationale_grounding_tool: Ensure the rationale uses only numbers present in params or the computed answer.
+- stem_number_grounding_tool: Ensure the stem introduces no new numbers beyond params/template literals (prevents leaking intermediate steps like scale factors).
+
+Tools live under `twin_generator/tools/` and are exposed via `agents.tool.function_tool`, which derives JSON schemas from Python type hints so the model can call them safely.
+
+### Pipeline Logic
+
+The step graph is defined in `twin_generator/pipeline.py` and executed by `twin_generator/pipeline_runner.py`:
+
+1. parse → ParserAgent on `problem_text` + `solution`.
+2. graph_analyze → GraphVisionAgent only when `graph_url` is provided; stores `graph_analysis` and common `observed_points` in `extras`; QA is skipped for this advisory step.
+3. concept → ConceptAgent over `parsed`.
+4. template → TemplateAgent using a restricted tool set; may incorporate `graph_analysis` into params/operations/visuals.
+5. sample → SampleAgent to produce numeric `params` preserving difficulty.
+6. symbolic → SymbolicSolveAgent then SymbolicSimplifyAgent; errors are captured as `symbolic_error` without hard‑failing the run.
+7. operations → OperationsAgent executes `operations`, calling registered tools and merging outputs into state (including `extras`).
+8. visual → If the template `visual.type` is `graph`, resolve any references (e.g., `"points": "graph_points"`) from state and render via `render_graph_tool`; if `table`, render HTML; if `graph_url` and no spec is requested, pass the URL directly.
+9. answer → Compute `answer` by evaluating `answer_expression` with `params` via `calc_answer_tool`; if `answer_expression` is an identifier present in `params`, use that value as a fallback.
+10. stem_choice → StemChoiceAgent generates `twin_stem`, `choices`, and `rationale` (optionally incorporating assets).
+11. format → FormatterAgent emits the final JSON and preserves assets.
+
+After each step (except ones marked to skip), QAAgent runs with its QA tool set. If QA fails, the runner attaches the feedback to the next attempt and retries the same step up to a limit (defaults to 5). Steps expected to emit JSON are retried earlier during parsing using a tolerant JSON loader/repairer.
+
 
 ## Output Format
 
@@ -190,4 +275,3 @@ math-twin/
 ## Contributing
 
 Issues and pull requests are welcome! If you add or modify pipeline steps, please include accompanying tests and ensure `pytest`, `mypy`, and `pre-commit` all pass before submitting.
-

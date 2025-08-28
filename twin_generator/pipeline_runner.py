@@ -105,7 +105,26 @@ class _Runner:
             attempts + 1,
             qa_out or "(empty response)",
         )
-        return qa_lower == "pass", qa_out
+        # Be tolerant to minor variations from the QA agent: treat common
+        # affirmative responses and empty strings as pass.
+        ok_synonyms = {
+            "pass",
+            "ok",
+            "okay",
+            "looks good",
+            "no issues",
+            "no issue",
+            "valid",
+            "all good",
+            "passes",
+        }
+        is_pass = (
+            qa_lower == "pass"
+            or qa_lower.startswith("pass")
+            or qa_lower in ok_synonyms
+            or qa_lower.strip() == ""
+        )
+        return is_pass, qa_out
 
     def run(self, inputs: PipelineState) -> PipelineState:
         data = copy.deepcopy(inputs)

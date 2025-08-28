@@ -5,3 +5,18 @@ __pycache__/
 *.pyc
 build/
 dist/
+
+# Virtual environments and caches
+.venv/
+venv/
+env/
+.tox/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.cache/
+.coverage
+coverage.xml
+.hypothesis/
+.idea/
+.vscode/

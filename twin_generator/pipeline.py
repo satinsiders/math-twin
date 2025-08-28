@@ -20,6 +20,7 @@ from .pipeline_runner import _Graph, _Runner, QA_MAX_RETRIES
 from .pipeline_state import PipelineState
 from .pipeline_steps import (
     _step_answer,
+    _step_graph_analyze,
     _step_concept,
     _step_format,
     _step_operations,
@@ -44,6 +45,7 @@ __all__ = ["generate_twin", "PipelineState"]
 _PIPELINE = _Graph(
     steps=[
         _step_parse,
+        _step_graph_analyze,
         _step_concept,
         _step_template,
         _step_sample,
@@ -63,6 +65,7 @@ def generate_twin(
     *,
     force_graph: bool = False,
     graph_spec: GraphSpec | None = None,
+    graph_url: str | None = None,
     verbose: bool = False,
 ) -> PipelineState:
     """Generate a twin SAT-style math question given a source problem/solution."""
@@ -72,6 +75,7 @@ def generate_twin(
         solution=solution_text,
         force_graph=force_graph,
         graph_spec=graph_spec,
+        graph_url=graph_url,
     )
     result = runner.run(state)
     return result
