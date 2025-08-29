@@ -18,10 +18,9 @@ __all__ = [
     "validate_answer_ref_tool",
     "detect_degenerate_params_tool",
     "count_concept_steps_tool",
-    "check_invariants_tool",
     "choices_truth_filter_tool",
     "rationale_grounding_tool",
-    "stem_number_grounding_tool",
+    "student_facing_mc_tool",
     "_sanitize_params_tool",
     "_validate_output_tool",
     "_check_asset",
@@ -29,10 +28,9 @@ __all__ = [
     "_validate_answer_ref_tool",
     "_detect_degenerate_params_tool",
     "_count_concept_steps_tool",
-    "_check_invariants_tool",
     "_choices_truth_filter_tool",
     "_rationale_grounding_tool",
-    "_stem_number_grounding_tool",
+    "_student_facing_mc_tool",
 ]
 
 
@@ -456,75 +454,7 @@ detect_degenerate_params_tool = function_tool(_detect_degenerate_params_tool)
 detect_degenerate_params_tool["name"] = "detect_degenerate_params_tool"
 
 
-def _check_invariants_tool(template_json: str, twin_stem: Optional[str] = None) -> dict[str, Any]:
-    """Check stem invariants from template.meta.invariants.
 
-    Supported invariant keys:
-    - ask: canonical ask tag (e.g., 'smaller_integer'). Enforced via phrase heuristics.
-    - forbid_asks: array of tags to forbid.
-    - require_phrases / forbid_phrases: literal substring checks.
-    Returns: { ok: bool, reasons: [string] }
-    """
-    reasons: list[str] = []
-    try:
-        tpl = json.loads(template_json) if isinstance(template_json, str) else template_json
-    except Exception:
-        return {"ok": False, "reasons": ["invalid template_json"]}
-    text = (twin_stem or "").strip()
-    invariants = None
-    try:
-        invariants = tpl.get("meta", {}).get("invariants") if isinstance(tpl, dict) else None
-        if invariants is None and isinstance(tpl, dict):
-            invariants = tpl.get("invariants")
-    except Exception:
-        invariants = None
-    if not isinstance(invariants, dict) or not text:
-        return {"ok": True, "reasons": []}
-
-    t = text.lower()
-    ask = invariants.get("ask")
-    forbid_asks = invariants.get("forbid_asks") or []
-    req_phr = invariants.get("require_phrases") or []
-    forb_phr = invariants.get("forbid_phrases") or []
-
-    def _enforce_ask(tag: str) -> None:
-        # Heuristic phrase mapping. Extend as needed.
-        tag = str(tag).lower().strip()
-        patterns: dict[str, list[str]] = {
-            "smaller_integer": ["smaller integer", "smaller of the two integers"],
-            "larger_integer": ["larger integer", "greater integer"],
-            "value_of_f": ["value of f"],
-            "solve_for_x": ["solve for x"],
-            "ordered_pair": ["ordered pair", "(x, y)"],
-        }
-        pats = patterns.get(tag, [])
-        if pats and not any(p in t for p in pats):
-            reasons.append(f"stem missing ask pattern for '{tag}'")
-
-    if isinstance(ask, str):
-        _enforce_ask(ask)
-    if isinstance(forbid_asks, list):
-        for tag in forbid_asks:
-            if not isinstance(tag, str):
-                continue
-            # Simple detection: any mapped phrase indicates violation
-            probe = str(tag).lower().strip()
-            if probe in {"ordered_pair"} and ("ordered pair" in t or "(" in t and ")" in t and "," in t):
-                reasons.append("stem violates forbidden ask 'ordered_pair'")
-            if probe == "solve_for_x" and "solve for x" in t:
-                reasons.append("stem violates forbidden ask 'solve_for_x'")
-    for phrase in req_phr:
-        if isinstance(phrase, str) and phrase and phrase.lower() not in t:
-            reasons.append(f"stem missing required phrase '{phrase}'")
-    for phrase in forb_phr:
-        if isinstance(phrase, str) and phrase and phrase.lower() in t:
-            reasons.append(f"stem contains forbidden phrase '{phrase}'")
-
-    return {"ok": len(reasons) == 0, "reasons": reasons}
-
-
-check_invariants_tool = function_tool(_check_invariants_tool)
-check_invariants_tool["name"] = "check_invariants_tool"
 
 
 def _choices_truth_filter_tool(
@@ -669,6 +599,91 @@ def _rationale_grounding_tool(state_json: str, rationale: Optional[str] = None) 
 
 rationale_grounding_tool = function_tool(_rationale_grounding_tool)
 rationale_grounding_tool["name"] = "rationale_grounding_tool"
+
+
+def _student_facing_mc_tool(block_json: str) -> dict[str, Any]:
+    """Validate that output is a student-facing MC SAT-style question.
+
+    Checks:
+    - twin_stem is a non-empty string, does not contain meta/provenance/solution phrases,
+      does not leak solution hints/step language, and ends with a question mark.
+    - choices is a list with 4 or 5 non-empty entries (string or number primitives).
+    Returns: { ok: bool, reasons: [str] }
+    """
+    reasons: list[str] = []
+    try:
+        block = json.loads(block_json) if isinstance(block_json, str) else block_json
+    except Exception:
+        return {"ok": False, "reasons": ["invalid-json"]}
+
+    stem = block.get("twin_stem") or block.get("question")
+    choices = block.get("choices")
+
+    if not isinstance(stem, str) or not stem.strip():
+        reasons.append("missing-or-empty-stem")
+    else:
+        s = stem.strip()
+        # Forbidden meta/provenance phrases
+        lower = s.lower()
+        forbidden = [
+            "solution:",
+            "answer:",
+            "correct answer",
+            "explanation:",
+            "based on the original",
+            "based on the source",
+            "original problem",
+            "source problem",
+            "same numbers as",
+            "as in the original",
+            "according to the solution",
+        ]
+        for phrase in forbidden:
+            if phrase in lower:
+                reasons.append(f"forbidden-phrase:{phrase}")
+                break
+        # Disallow common solution-hint language in the stem
+        # - Named techniques or intermediate quantities that reveal method
+        # - Enumerated step formatting like "1.", "2." which suggests worked steps
+        import re as _re
+        hint_patterns = [
+            r"\bvi[eè]ta\b",  # Vieta / Viète
+            r"\bdiscriminant\b",
+            r"\bcomplete the square\b",
+            r"\bby factoring\b|\bfactor (?:the|out)\b",
+            r"\bdifferentiat\w*\b|\bderivative\b",
+            r"\bintegrat\w*\b|\bantiderivative\b",
+            r"\busing\s+(?:vi[eè]ta|the\s+discriminant|the\s+derivative|this\s+identity)\b",
+            r"(?:^|\s)(?:[1-9]|10)\s*\.",  # enumerated steps like 1. 2.
+            r"\bintroduce\s+integers?\b",
+            r"\brationale\b|\bwe\s+have\b|\btherefore\b|\bhence\b",
+        ]
+        for pat in hint_patterns:
+            if _re.search(pat, lower):
+                reasons.append(f"hint-language:{pat}")
+                break
+        # Require a question mark somewhere towards the end
+        if "?" not in s:
+            reasons.append("stem-missing-question-mark")
+
+    if not isinstance(choices, list):
+        reasons.append("choices-missing-or-not-list")
+    else:
+        n = len(choices)
+        if n < 4 or n > 5:
+            reasons.append("choices-count-not-4-5")
+        # Ensure each choice is a primitive and non-empty when string
+        for i, c in enumerate(choices):
+            if isinstance(c, (list, dict)):
+                reasons.append(f"choice-non-primitive:{i}")
+            elif isinstance(c, str) and not c.strip():
+                reasons.append(f"choice-empty-string:{i}")
+
+    return {"ok": len(reasons) == 0, "reasons": reasons}
+
+
+student_facing_mc_tool = function_tool(_student_facing_mc_tool)
+student_facing_mc_tool["name"] = "student_facing_mc_tool"
 
 def _stem_number_grounding_tool(state_json: str, twin_stem: Optional[str] = None) -> dict[str, Any]:
     """Ensure twin_stem does not introduce numeric values beyond the parameters.

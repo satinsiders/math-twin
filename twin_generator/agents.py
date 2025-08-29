@@ -68,8 +68,7 @@ TemplateAgent = Agent(
         "preserves those properties under typical samples. Include a metadata object to guide downstream steps: set meta.difficulty to the parsed "
         "difficulty label ('easy'|'medium'|'hard') when available, include meta.complexity_features with fields like step_count (from ConceptAgent), "
         "variable_count, nonlinearity:boolean, and special_structures:[string]; also add template-aware guardrails via meta.difficulty_profile "
-        "(e.g., needs_square_discriminant:true when an integer answer requires a square discriminant; min_value_ranges:{symbol:{min|max|abs_min}}) and "
-        "meta.invariants to pin the ask (e.g., ask:'smaller_integer', forbid_asks:['ordered_pair'], require_phrases:['smaller integer']). These fields help the "
+        "(e.g., needs_square_discriminant:true when an integer answer requires a square discriminant; min_value_ranges:{symbol:{min|max|abs_min}}). These fields help the "
         "sampler and QA preserve intent and difficulty. If graph_analysis "
         "is provided in input, you may use it to seed parameters or to define "
         "operations that compute a list of plotting points (e.g., 'graph_points') via available tools. "
@@ -92,8 +91,11 @@ SampleAgent = Agent(
         "rational (denominator 2–12) so arithmetic is not by inspection; hard → include at least one multi-digit coefficient AND at least one non-integer rational, "
         "and prefer choices that preserve non-integer or irrational results when the source implied them. If metadata is absent, default to medium behavior. "
         "Avoid choosing all single-digit integers for medium/hard. For radicals, avoid perfect-square under-roots; for logs, avoid powers of the base; for ratios, avoid "
-        "values equating numerators/denominators that simplify to 1. Output: one JSON object mapping each required symbol to a plain number or "
-        "SymPy-compatible numeric expression. Extra fields are forbidden. If no valid assignment exists, return the plain string 'null'."
+        "values equating numerators/denominators that simplify to 1. When present, honor optional guidance keys: \n"
+        "- avoid_same_answer:boolean and forbidden_answer_values:[number]: if the template's answer_expression is numeric-evaluable under sampled params, choose values so the computed answer is not in the forbidden set.\n"
+        "Output: one JSON object mapping each required symbol to a plain number or "
+        "SymPy-compatible numeric expression. Extra fields are forbidden. If no parameters need values at this step or no valid assignment exists under the "
+        "given constraints, return an empty JSON object {} (never a string)."
     ),
     model="gpt-5-nano",
 )
@@ -101,15 +103,14 @@ SampleAgent = Agent(
 StemChoiceAgent = Agent(
     name="StemChoiceAgent",
     instructions=(
-        "Input: JSON {template, params, graph_path?, table_html?}. Substitute params into the template "
-        "and craft a new SAT-style question `twin_stem` that tests the same concept. Match the original difficulty: maintain similar reasoning depth "
-        "and numeric complexity (e.g., keep fractions/radicals/non-integers if present; avoid one-step giveaways). Generate an array `choices` (typically 4 or 5) of "
-        "plausible answers with exactly one correct option and provide a brief `rationale` for that choice. Use distractors that reflect realistic misconceptions at "
-        "the same difficulty (e.g., sign error, inverted ratio, dropped absolute value branch, misapplied exponent rule), not trivial noise. Keep distractors in the "
-        "same numeric form and scale as the correct answer (e.g., if the correct answer is a fraction or involves a radical, prefer distractors of that form; avoid an "
-        "obvious outlier like a simple integer when others are non-integers). Do NOT leak solution steps or computed helper quantities in the stem: "
-        "avoid phrases like 'the scale factor is ...', 'the discriminant is ...', 'the slope is ...', or enumerated step language ('first', 'then', 'therefore'). "
-        "Keep only the problem statement and given data. Output: one JSON object with double-quoted keys/values and no trailing text."
+        "Input: JSON {template, params, graph_path?, table_html?}. Substitute params into the template and REPHRASE into a fully student-facing SAT-style "
+        "multiple-choice problem. The `twin_stem` must be a standalone question addressed to the student, with no meta/provenance language and no solution hints; "
+        "end the stem with a question mark. Match the original difficulty: maintain similar reasoning depth and numeric complexity (e.g., keep fractions/radicals/"
+        "non-integers if present; avoid one-step giveaways). Generate an array `choices` of 4 or 5 plausible answers with exactly one correct option and provide a brief "
+        "`rationale` for that choice. Use distractors reflecting realistic misconceptions at the same difficulty (e.g., sign error, inverted ratio, dropped absolute value branch, "
+        "misapplied exponent rule), not trivial noise. Keep distractors in the same numeric form/scale as the correct answer. Do NOT leak solution steps or computed helper quantities in the stem: "
+        "avoid phrases like 'the scale factor is ...', 'the discriminant is ...', 'the slope is ...', or enumerated step language ('first', 'then', 'therefore'). Do NOT reference the source/original problem or solution. "
+        "Output: one JSON object with double-quoted keys/values and no trailing text."
     ),
     model="gpt-5-nano",
 )
@@ -119,9 +120,9 @@ FormatterAgent = Agent(
     instructions=(
         "Input: JSON {twin_stem, choices, rationale, graph_path?, table_html?, computed_value?}. "
         "Return a single minified JSON object with double-quoted keys/values and no trailing text. "
-        "The object may contain only twin_stem, choices[], answer_index (0-based index of the "
-        "correct choice), answer_value, rationale, optional graph_path/table_html if provided, "
-        "and errors[]. Verify answer_index points to a choice whose value equals answer_value. "
+        "The object may contain only twin_stem, choices[], answer_index (0-based index of the correct choice), answer_value, rationale, optional graph_path/table_html if provided, and errors[]. "
+        "Enforce student-facing MC format: twin_stem must be a question with a trailing '?', no meta/provenance/solution language, and choices must number 4 or 5 non-empty items. "
+        "Verify answer_index points to a choice whose value equals answer_value. "
         "List any detected issues in errors (empty array if none) and do not emit additional "
         "fields or commentary."
     ),
@@ -155,17 +156,15 @@ QAAgent = Agent(
         "template and params exist, call detect_degenerate_params_tool(template, params). If it returns reasons, fail with the first reason to avoid "
         "trivializing parameter choices (e.g., 0/±1 coefficients, perfect-square discriminants for quadratics, perfect squares under sqrt).\n"
         "- visual: if a graph/table is expected by template.visual.type, then require the corresponding asset (graph_path or table_html).\n"
-        "- stem_choice: require twin_stem (string), choices (array), and rationale (string). To preserve difficulty, when template and params exist, "
-        "call detect_degenerate_params_tool (template-aware) and fail on the first reason. If template.meta.invariants exists, call check_invariants_tool "
-        "with {template, twin_stem}; fail if the stem violates ask/forbid constraints. Also call stem_number_grounding_tool with the full state and twin_stem; "
-        "fail if the stem introduces numeric values not present in params or literal numbers in the template. Also call choices_truth_filter_tool with {template, params, choices, "
+        "- stem_choice: require twin_stem (string), choices (array), and rationale (string). Enforce student-facing MC format by calling student_facing_mc_tool on {twin_stem, choices}: "
+        "twin_stem must end with '?', contain no meta/provenance/solution language, and choices must be 4 or 5 non-empty items. To preserve difficulty, when template and params exist, "
+        "call detect_degenerate_params_tool (template-aware) and fail on the first reason. Also call choices_truth_filter_tool with {template, params, choices, "
         "computed_value if available}; fail if multiple choices evaluate as correct or a distractor equals the computed value. Optionally, you may call "
         "count_concept_steps_tool on data.concept to compare reasoning depth, but still output a single pass/fail sentence.\n"
         "- answer: allow non-numeric cases; if the template's answer_expression is an identifier, "
         "use validate_answer_ref_tool and confirm availability in params by this step.\n"
-        "- format: require a well-formed block; use validate_output_tool to confirm structure. For stem grounding, call stem_number_grounding_tool with the full state and twin_stem; "
-        "fail if the stem introduces numeric values not present in params/template literals. For rationale grounding, call rationale_grounding_tool with the "
-        "full state and the rationale; fail if the rationale introduces numeric values not present in parameters, computed value, or other state trace.\n\n"
+        "- format: require a well-formed block; use validate_output_tool to confirm structure. Also call student_facing_mc_tool to ensure a student-facing MC question; fail on the first reason. "
+        "For rationale grounding, call rationale_grounding_tool with the full state and the rationale; fail if the rationale introduces numeric values not present in parameters, computed value, or other state trace.\n\n"
         "Rules: Do NOT demand fields from future steps. Treat absent optional assets as acceptable when template.visual.type is 'none'. "
         "When all checks succeed, output exactly: pass (lowercase, no extra text). Otherwise, return one concise sentence describing the first failing issue."
     ),

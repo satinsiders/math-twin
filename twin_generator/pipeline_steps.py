@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import json
 from typing import Any, cast
+import copy
+import re
 
 from . import constants as C
 from .agents import (
@@ -88,15 +90,104 @@ def _step_template(state: PipelineState) -> PipelineState:
 
 
 def _step_sample(state: PipelineState) -> PipelineState:
+    def _sanitize_template_for_sampling(tpl: dict[str, Any]) -> dict[str, Any]:
+        """Return a copy of the template with non-sampleable clutter removed.
+
+        - Drop domains for clearly non-numeric symbols (e.g., function types like "R -> R").
+        - Drop domains for symbols that are declared as operation outputs (derived values).
+        - Remove obviously contradictory textual constraints like "a + b = r1 + r2" when
+          the template also asserts r1, r2 are roots of f and f(x) = a x^2 + b x + c.
+        """
+        cleaned = copy.deepcopy(tpl)
+        try:
+            domains = cleaned.get("domains") if isinstance(cleaned, dict) else None
+            ops = cleaned.get("operations") if isinstance(cleaned, dict) else None
+            # 1) Remove domains for non-numeric symbols (heuristic)
+            if isinstance(domains, dict):
+                to_delete: list[str] = []
+                for k, v in domains.items():
+                    try:
+                        sv = str(v).lower()
+                    except Exception:
+                        sv = str(v)
+                    # obvious non-numeric descriptors
+                    if "->" in sv or "function" in sv:
+                        to_delete.append(k)
+                # common symbols that shouldn't be sampled
+                for sym in ("f", "x"):
+                    if sym in domains:
+                        to_delete.append(sym)
+                # 2) Remove domains for operation outputs (derived values)
+                derived: set[str] = set()
+                if isinstance(ops, list):
+                    for op in ops:
+                        if isinstance(op, dict):
+                            outk = op.get("output")
+                            if isinstance(outk, str):
+                                derived.add(outk)
+                            outs = op.get("outputs")
+                            if isinstance(outs, list):
+                                for name in outs:
+                                    if isinstance(name, str):
+                                        derived.add(name)
+                for name in derived:
+                    if name in domains:
+                        to_delete.append(name)
+                for k in set(to_delete):
+                    try:
+                        del domains[k]
+                    except Exception:
+                        pass
+            # 3) Remove contradictory textual constraint "a + b = r1 + r2"
+            if isinstance(cleaned, dict) and isinstance(cleaned.get("template"), str):
+                t = cleaned["template"]
+                # Only strip if the quadratic coefficient form appears and roots are mentioned
+                if re.search(r"\ba\s*\*?\s*x\s*\^\s*2\s*\+\s*b\s*\*?\s*x\s*\+\s*c", t.replace(" ", ""), re.IGNORECASE) or (
+                    "a x^2 + b x + c" in t or "ax^2 + bx + c" in t
+                ):
+                    if "roots of f" in t or "real roots of f" in t or "r1" in t and "r2" in t:
+                        cleaned["template"] = re.sub(r"(?i)\b[aA]\s*\+\s*[bB]\s*=\s*r1\s*\+\s*r2\b", "", t)
+        except Exception:
+            pass
+        return cleaned
+
+    tpl_for_sampling = (
+        _sanitize_template_for_sampling(state.template)
+        if isinstance(state.template, dict)
+        else state.template
+    )
+    # Include forbidden answer values derived from the source to proactively avoid
+    # sampling params that yield the same final answer as the original.
+    payload: dict[str, Any] = {"template": tpl_for_sampling}
+    try:
+        original_ans = None
+        if isinstance(state.parsed, dict):
+            original_ans = state.parsed.get("answer_form")
+        if original_ans is not None:
+            try:
+                original_val = _calc_answer(str(original_ans), json.dumps({}))
+            except Exception:
+                original_val = None
+            if original_val is not None:
+                payload["avoid_same_answer"] = True
+                payload["forbidden_answer_values"] = [original_val]
+    except Exception:
+        pass
+
     out, err = invoke_agent(
         SampleAgent,
-        json.dumps({"template": state.template}),
+        json.dumps(payload),
         tools=_TOOLS,
         qa_feedback=state.qa_feedback,
     )
     state.qa_feedback = None
     if err:
         state.error = err
+        return state
+    # Be tolerant to agents that may signal "no params" via JSON null or a literal
+    # "null" string. Treat these as an empty params object rather than an error.
+    if out is None or (isinstance(out, str) and out.strip().lower() == "null"):
+        state.params = {}
         return state
     if not isinstance(out, dict):
         state.error = "SampleAgent produced non-dict params"
@@ -207,7 +298,10 @@ def _select_graph_spec(
     if force:
         return user_spec or visual.get("data") or C.DEFAULT_GRAPH_SPEC
     if vtype == "graph":
-        return visual.get("data") or user_spec or C.DEFAULT_GRAPH_SPEC
+        # Do not auto-inject a default spec unless force is set; only use
+        # explicit data or a user override to avoid creating visuals when
+        # the source problem had none.
+        return visual.get("data") or user_spec
     return None
 
 
@@ -224,6 +318,18 @@ def _step_visual(state: PipelineState) -> PipelineState:
         visual = {"type": "none"}
 
     spec = _select_graph_spec(visual, state.graph_spec, bool(state.force_graph))
+    # If template requested a graph but provided no data and no override, demote to 'none'
+    if (
+        spec is None
+        and isinstance(state.template, dict)
+        and isinstance(state.template.get("visual"), dict)
+        and state.template["visual"].get("type") == "graph"
+        and not state.graph_url
+    ):
+        try:
+            state.template["visual"]["type"] = "none"
+        except Exception:
+            pass
     # If an external URL is provided and no spec is requested, prefer direct URL
     if spec is None and state.graph_url:
         # Use the external image as-is; QA will allow URLs
@@ -277,6 +383,53 @@ def _step_answer(state: PipelineState) -> PipelineState:
             state.extras["computed_value"] = state.answer
     except Exception:
         # Be resilient if extras isn't a dict for any reason
+        pass
+
+    # Avoid producing a twin with the exact same numeric answer as the source.
+    # If the original parsed answer is numeric and equals the computed twin answer,
+    # resample parameters up to a small cap.
+    try:
+        original_ans = None
+        if isinstance(state.parsed, dict):
+            original_ans = state.parsed.get("answer_form")
+        # Attempt to evaluate original answer numerically if it looks numeric or an expression
+        original_val = None
+        if original_ans is not None:
+            try:
+                # Use the same calc routine with empty params context
+                original_val = _calc_answer(str(original_ans), json.dumps({}))
+            except Exception:
+                original_val = None
+        def _as_float(x: Any) -> float | None:
+            try:
+                if isinstance(x, (int, float)):
+                    return float(x)
+                # Strings that are numeric-like
+                return float(str(x))
+            except Exception:
+                return None
+        twin_val = _as_float(state.answer)
+        orig_val = _as_float(original_val)
+        if twin_val is not None and orig_val is not None:
+            # Compare within a small tolerance for floating cases
+            if abs(twin_val - orig_val) <= 1e-9:
+                attempts = int(state.extras.get("resample_avoid_same_answer_attempts", 0) or 0)
+                if attempts < 3:
+                    state.extras["resample_avoid_same_answer_attempts"] = attempts + 1
+                    # Schedule a re-sample + recompute chain, skip QA on this pass
+                    state.skip_qa = True
+                    state.next_steps = [
+                        _step_sample,
+                        _step_symbolic,
+                        _step_operations,
+                        _step_visual,
+                        _step_answer,
+                    ]
+                else:
+                    # Give up after a few attempts; record for diagnostics
+                    state.extras["note_same_answer_allowed"] = True
+    except Exception:
+        # Be fault-tolerant: if any of the above fails, proceed without resampling
         pass
     return state
 
@@ -350,6 +503,42 @@ def _step_format(state: PipelineState) -> PipelineState:
     state.errors = out_dict.get("errors")
     state.graph_path = out_dict.get("graph_path", state.graph_path)
     state.table_html = out_dict.get("table_html", state.table_html)
+
+    # Final safeguard: if the formatted twin's answer matches the source numeric answer,
+    # schedule a resample chain to enforce a different outcome.
+    try:
+        original_ans = None
+        if isinstance(state.parsed, dict):
+            original_ans = state.parsed.get("answer_form")
+        original_val = None
+        if original_ans is not None:
+            try:
+                original_val = _calc_answer(str(original_ans), json.dumps({}))
+            except Exception:
+                original_val = None
+        def _as_float(x: Any) -> float | None:
+            try:
+                return float(str(x))
+            except Exception:
+                return None
+        twin_val = _as_float(state.answer_value)
+        orig_val = _as_float(original_val)
+        if twin_val is not None and orig_val is not None and abs(twin_val - orig_val) <= 1e-9:
+            attempts = int(state.extras.get("resample_avoid_same_answer_attempts", 0) or 0)
+            if attempts < 3:
+                state.extras["resample_avoid_same_answer_attempts"] = attempts + 1
+                state.skip_qa = True
+                state.next_steps = [
+                    _step_sample,
+                    _step_symbolic,
+                    _step_operations,
+                    _step_visual,
+                    _step_answer,
+                    _step_stem_choice,
+                    _step_format,
+                ]
+    except Exception:
+        pass
     return state
 
 

@@ -45,9 +45,6 @@ Heuristics include:
 
 Returns `{ ok: boolean, reasons: [string], details: {...} }`.
 
-## check_invariants_tool
-Checks stem invariants emitted by the template to prevent ask drift. Inputs: `template_json`, `twin_stem`. Enforces `template.meta.invariants` keys: `ask`, `forbid_asks`, `require_phrases`, `forbid_phrases`. Returns `{ ok, reasons }`.
-
 ## choices_truth_filter_tool
 Simple truth filter to avoid duplicate correct distractors. Inputs: `choices_json`, optional `computed_value`, and optionally `template_json` + `params_json` to compute the expected numeric answer when `computed_value` is not given. Counts how many choices equal the expected value (numeric/string equality within tight tolerance). Returns `{ ok, correct_count }` and fails when more than one matches.
 

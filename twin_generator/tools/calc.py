@@ -98,8 +98,19 @@ def _calc_answer(expression: str, params_json: str) -> Any:  # noqa: ANN401 â€“Â
     if isinstance(expr, Relational):
         raise ValueError(error_msg)
 
-    def _eval_advanced(e: sp.Expr, depth: int = 0) -> sp.Expr:
+    def _eval_advanced(e: Any, depth: int = 0) -> Any:
+        """Evaluate advanced constructs (Derivatives/Integrals/Limits/Sums) safely.
+
+        Converts native Python numbers to SymPy types before introspection to
+        avoid calling SymPy APIs on plain ints/floats.
+        """
         if depth > 5:
+            return e
+        # Ensure a SymPy object before calling methods like .atoms/.doit
+        try:
+            if not isinstance(e, sp.Basic):
+                e = sp.sympify(e)
+        except Exception:
             return e
         targets = list(e.atoms(sp.Derivative, sp.Integral, sp.Limit, sp.Sum))
         if not targets:

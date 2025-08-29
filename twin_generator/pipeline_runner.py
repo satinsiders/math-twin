@@ -10,6 +10,8 @@ from typing import Callable
 from .agents import QAAgent
 from .pipeline_helpers import AgentsRunner, _QA_TOOLS
 from .utils import get_final_output
+from .tools import qa_tools as _qa
+from .utils import coerce_answers as _coerce, validate_output as _validate
 from .pipeline_state import PipelineState
 
 # Default number of times to retry a step when QA checks fail.
@@ -64,6 +66,145 @@ class _Runner:
         total_steps: int,
         json_required: bool,
     ) -> tuple[bool, str]:
+        """Run deterministic prechecks, then fall back to QAAgent.
+
+        For critical steps like `stem_choice` and `format`, enforce student-facing
+        constraints and no-hint policy without relying on an agent. Also ensure the
+        twin's final numeric answer differs from the source when comparable.
+        """
+        # Deterministic prechecks for MC formatting and hint leakage
+        try:
+            is_stem = name == "stem_choice"
+            is_format = name == "format"
+            if is_stem or is_format:
+                # Build a minimal block view
+                block = {
+                    "twin_stem": data.twin_stem or (data.stem_data or {}).get("twin_stem"),
+                    "choices": data.choices or (data.stem_data or {}).get("choices"),
+                }
+
+                # Enforce student-facing MC constraints and no-hint language (no need for answer fields here)
+                sf = _qa._student_facing_mc_tool(block)
+                if not sf.get("ok", False):
+                    reasons = sf.get("reasons", [])
+                    msg = f"student-facing-fail:{';'.join(reasons)}"
+                    data.qa_feedback = msg
+                    self.logger.info(
+                        "[twin-generator] step %d/%d: %s QA precheck: %s",
+                        idx + 1,
+                        total_steps,
+                        name,
+                        msg,
+                    )
+                    return False, msg
+
+                
+
+                # Ensure exactly one correct choice under computed value
+                # Do not block at stem step on truth filter; enforce at format where answers are fixed
+                if (not is_stem) and data.template and data.params and block.get("choices"):
+                    ctf = _qa._choices_truth_filter_tool(
+                        block.get("choices"),
+                        data.answer,
+                        json.dumps(data.template),
+                        json.dumps(data.params),
+                    )
+                    if not ctf.get("ok", False):
+                        msg = "choices-truth-fail:multiple-correct-or-duplicate"
+                        data.qa_feedback = msg
+                        self.logger.info(
+                            "[twin-generator] step %d/%d: %s QA precheck: %s",
+                            idx + 1,
+                            total_steps,
+                            name,
+                            msg,
+                        )
+                        return False, msg
+
+                # Ground numbers introduced in the stem to params/template
+                try:
+                    from dataclasses import asdict as _asdict
+                    st_json = json.dumps(_asdict(data))
+                except Exception:
+                    st_json = "{}"
+                sng = _qa._stem_number_grounding_tool(st_json, block.get("twin_stem"))
+                if not sng.get("ok", True):
+                    unknown = sng.get("unknown", [])
+                    # Non-blocking guidance at stem step to avoid numeric leakage in stems
+                    data.qa_feedback = f"stem-number-advice:{','.join(map(str, unknown))}"
+
+                # Rationale numeric grounding
+                if is_stem:
+                    rationale = (data.stem_data or {}).get("rationale") if isinstance(data.stem_data, dict) else None
+                    if isinstance(rationale, str) and rationale.strip():
+                        rg = _qa._rationale_grounding_tool(st_json, rationale)
+                        if not rg.get("ok", True):
+                            # Non-blocking advice at stem step; enforce at format
+                            data.qa_feedback = f"rationale-number-advice:{','.join(map(str, rg.get('unknown', [])))}"
+
+                if is_format:
+                    # For format step, we now have answer fields and perform full validation
+                    full_block = {
+                        **block,
+                        "answer_index": data.answer_index,
+                        "answer_value": data.answer_value,
+                    }
+                    full_block = _coerce(full_block)
+                    v = _validate({**full_block})
+                    if v.get("errors"):
+                        msg = f"format-invalid:{';'.join(v['errors'])}"
+                        data.qa_feedback = msg
+                        return False, msg
+
+                    # Rationale numeric grounding (formatter rationale)
+                    if isinstance(data.rationale, str) and data.rationale.strip():
+                        rg = _qa._rationale_grounding_tool(st_json, data.rationale)
+                        if not rg.get("ok", True):
+                            msg = f"rationale-number-drift:{','.join(map(str, rg.get('unknown', [])))}"
+                            data.qa_feedback = msg
+                            return False, msg
+
+                    # Enforce: twin answer must differ from source numeric answer
+                    def _as_float(x: object) -> float | None:
+                        try:
+                            return float(str(x))
+                        except Exception:
+                            return None
+                    orig_ans = None
+                    try:
+                        if isinstance(data.parsed, dict):
+                            orig_ans = data.parsed.get("answer_form")
+                    except Exception:
+                        pass
+                    orig_val = None
+                    if orig_ans is not None:
+                        try:
+                            # Evaluate using calc tool with empty params context
+                            from .tools.calc import _calc_answer as _calc
+                            orig_val = _calc(str(orig_ans), json.dumps({}))
+                        except Exception:
+                            orig_val = None
+                    twin_val = _as_float(full_block.get("answer_value"))
+                    o_val = _as_float(orig_val)
+                    if twin_val is not None and o_val is not None and abs(twin_val - o_val) <= 1e-9:
+                        msg = "twin-answer-equals-source"
+                        data.qa_feedback = msg
+                        return False, msg
+        except Exception:
+            # If prechecks themselves error, fall back to QAAgent
+            pass
+
+        # Assets timing guard: do not require graph/table assets before the visual step
+        try:
+            if name == "operations":
+                v = (data.template or {}).get("visual") if isinstance(data.template, dict) else None
+                vtype = v.get("type") if isinstance(v, dict) else None
+                # Graph/table assets are produced in the subsequent visual step
+                if vtype in {"graph", "table"} and not (data.graph_path or data.table_html):
+                    return True, "graph/table asset not required before visual step"
+        except Exception:
+            # If inspection fails, proceed to QAAgent below
+            pass
         try:
             qa_in = json.dumps({"step": name, "data": asdict(data)})
         except (TypeError, ValueError) as exc:

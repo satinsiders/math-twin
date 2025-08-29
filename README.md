@@ -172,7 +172,8 @@ QA‑focused tools (used by QAAgent):
 - count_concept_steps_tool: Count numbered lines in ConceptAgent output to approximate step depth.
 - choices_truth_filter_tool: Ensure only one choice matches the computed answer; flags duplicate-correct distractors.
 - rationale_grounding_tool: Ensure the rationale uses only numbers present in params or the computed answer.
-- stem_number_grounding_tool: Ensure the stem introduces no new numbers beyond params/template literals (prevents leaking intermediate steps like scale factors).
+- student_facing_mc_tool: Verify that `twin_stem` is a standalone student-facing question ending with a question mark and `choices` contains 4–5 non-empty options; rejects meta/provenance/solution language.
+
 
 Tools live under `twin_generator/tools/` and are exposed via `agents.tool.function_tool`, which derives JSON schemas from Python type hints so the model can call them safely.
 

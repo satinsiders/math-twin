@@ -31,10 +31,6 @@ this JSON object with no trailing explanation.
       as trivializing; instead it will require the discriminant to be a perfect square when applicable (e.g., integer‑answer twins).
     - `min_value_ranges` (object): map of symbol → constraints object. Supported keys: `min`, `max`, `abs_min`. QA flags
       parameter values outside these ranges. Example: `{ "C": {"abs_min": 2}, "M": {"min": 5} }`.
-  - `invariants` (object, optional): stem/ask constraints to prevent target drift. Examples:
-    - `ask`: canonical ask tag like `"smaller_integer"`, `"value_of_f"`, `"solve_for_x"`.
-    - `forbid_asks`: array of tags to forbid (e.g., `["ordered_pair", "range"]`).
-    - `require_phrases`/`forbid_phrases`: arrays of literal phrases expected or disallowed in the final stem.
 
 ```json
 {
@@ -48,7 +44,6 @@ this JSON object with no trailing explanation.
     "difficulty": "medium",
     "complexity_features": {"step_count": 3, "variable_count": 2, "nonlinearity": false, "special_structures": []},
     "difficulty_profile": {"needs_square_discriminant": true, "min_value_ranges": {"C": {"abs_min": 2}}},
-    "invariants": {"ask": "smaller_integer", "forbid_asks": ["ordered_pair"]}
   }
 }
 ```

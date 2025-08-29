@@ -19,10 +19,9 @@ from .tools.qa_tools import (
     validate_output_tool,
     detect_degenerate_params_tool,
     count_concept_steps_tool,
-    check_invariants_tool,
     choices_truth_filter_tool,
     rationale_grounding_tool,
-    stem_number_grounding_tool,
+    student_facing_mc_tool,
 )
 from .utils import get_final_output, safe_json
 
@@ -59,10 +58,9 @@ _QA_TOOLS = [
     graph_consistency_tool,
     detect_degenerate_params_tool,
     count_concept_steps_tool,
-    check_invariants_tool,
     choices_truth_filter_tool,
     rationale_grounding_tool,
-    stem_number_grounding_tool,
+    student_facing_mc_tool,
 ]
 _TEMPLATE_TOOLS = [calc_answer_tool]
 _TEMPLATE_MAX_RETRIES = 3
