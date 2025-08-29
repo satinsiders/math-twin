@@ -83,7 +83,7 @@ SampleAgent = Agent(
     instructions=(
         "Input: JSON {template}. Generate numeric values for each parameter so every symbol "
         "satisfies its domain and is convertible to float or an exact SymPy number. Preserve difficulty by avoiding values "
-        "that trivialize the problem: do not select 0 or 1 for coefficients that cancel/neutralize steps; avoid equal parameters that cancel terms; "
+        "that trivialize the problem: do not select 0 or ±1 for coefficients that cancel/neutralize steps; avoid equal parameters that cancel terms; "
         "prefer denominators > 1 when fractions are intended; avoid perfect squares/cubes when they would remove radicals; ensure quadratic discriminants "
         "are non-perfect squares when the canonical path expects irrational roots; choose signs/magnitudes that keep the same reasoning depth. "
         "Consult the template's difficulty metadata when present (template.meta.difficulty or template.difficulty) and scale numeric choices accordingly: "
@@ -110,7 +110,9 @@ StemChoiceAgent = Agent(
         "`rationale` for that choice. Use distractors reflecting realistic misconceptions at the same difficulty (e.g., sign error, inverted ratio, dropped absolute value branch, "
         "misapplied exponent rule), not trivial noise. Keep distractors in the same numeric form/scale as the correct answer. Do NOT leak solution steps or computed helper quantities in the stem: "
         "avoid phrases like 'the scale factor is ...', 'the discriminant is ...', 'the slope is ...', or enumerated step language ('first', 'then', 'therefore'). Do NOT reference the source/original problem or solution. "
-        "Output: one JSON object with double-quoted keys/values and no trailing text."
+        "Output: return EXACTLY ONE minified JSON object with double-quoted keys/values and no trailing text, containing ONLY: "
+        "twin_stem (string), choices (array), rationale (string). Constraints: twin_stem must end with '?'; choices must have 4 or 5 entries; each entry must be a JSON PRIMITIVE (number or string) — never an object, array, LaTeX, or formatted markup; "
+        "strings must be non-empty. Prefer numeric choices emitted as numbers (not quoted) when numeric. The rationale must be present and non-empty (1–2 concise sentences), and must not introduce numeric values that do not appear in params or the template; if uncertain, state a conceptual reason without numbers."
     ),
     model="gpt-5-nano",
 )

@@ -16,6 +16,7 @@ Generate SAT-style "twin" math problems from a reference problem and official so
 10. [Development](#development)
 11. [Project Layout](#project-layout)
 12. [Contributing](#contributing)
+13. [Micro‑Solver (Experimental)](#micro-solver-experimental)
 
 ## Overview
 
@@ -36,6 +37,10 @@ prompts or included as a ``qa_feedback`` field in JSON payloads so agents can
 correct mistakes on retry.
 
 Optional agents such as **SymbolicSolveAgent** and **SymbolicSimplifyAgent** handle heavy symbolic manipulation when required.
+
+## Micro‑Solver (Experimental)
+
+For ultra‑granular math solving, this repo includes a micro‑solver (see `docs/micro_solver.md`). It decomposes solving into tiny, verifiable micro‑steps aligned with the cognitive flow recognition → reasoning → calculation. Each micro‑step is handled by a narrowly scoped agent with strict I/O and micro‑QA after every step. The micro‑solver is additive and does not alter the twin generation pipeline.
 
 ## Installation
 
@@ -261,6 +266,7 @@ pre-commit run --files path/to/changed_file.py
 ```
 math-twin/
 ├── agents/              # Minimal Agent and tool helpers used by the pipeline
+├── micro_solver/        # Ultra‑granular math solver (recognition→reasoning→calculation)
 ├── docs/                # Additional documentation and schemas
 ├── tests/               # Pytest suite covering pipeline behavior
 ├── twin_generator/      # Core package

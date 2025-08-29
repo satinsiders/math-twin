@@ -17,6 +17,8 @@ setup(
     entry_points={
         "console_scripts": [
             "twin-generator = twin_generator.cli:main",
+            "micro-solve = micro_solver.cli:main",
+            "micro-plan-lint = micro_solver.plan_lint:main",
         ],
     },
 )

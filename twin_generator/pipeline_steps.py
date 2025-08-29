@@ -29,7 +29,7 @@ from .pipeline_helpers import (
 from .tools.calc import _calc_answer
 from .tools.graph import _render_graph
 from .tools.html_table import _make_html_table
-from .utils import _normalize_graph_points
+from .utils import _normalize_graph_points, coerce_answers as _coerce_answers
 from .pipeline_state import PipelineState
 
 
@@ -488,6 +488,17 @@ def _step_format(state: PipelineState) -> PipelineState:
         state.error = err
         return state
     out_dict = cast(dict[str, Any], out)
+
+    # Normalize legacy answer fields: if the agent returned only `answer`,
+    # coerce it into `answer_index` and `answer_value` so downstream QA sees
+    # a well‑formed block. This mirrors validate_output_tool's behavior but
+    # applies it earlier so state carries the correct fields.
+    try:
+        if isinstance(out_dict, dict):
+            out_dict = _coerce_answers(dict(out_dict))
+    except Exception:
+        # Be tolerant; let QA surface any issues
+        pass
 
     # Pass-through assets in case the formatter dropped them
     if state.graph_path:

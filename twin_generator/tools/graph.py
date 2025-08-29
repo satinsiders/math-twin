@@ -10,6 +10,37 @@ from typing import Any
 
 from agents.tool import function_tool
 
+# Attempt to choose a usable matplotlib backend at import time so environments
+# without a GUI backend still work and tests can assert the fallback warning.
+try:  # pragma: no cover - environment dependent
+    import matplotlib  # type: ignore
+
+    def _ensure_backend() -> None:
+        try:
+            backend = matplotlib.get_backend().lower()
+        except Exception:
+            backend = ""
+        if backend not in {"agg", "tkagg"}:
+            env_backend = os.environ.get("MPLBACKEND", "").lower()
+            prefer_tk = bool(os.environ.get("DISPLAY")) or env_backend == "tkagg"
+            if prefer_tk:
+                try:
+                    matplotlib.use("TkAgg")
+                except Exception as exc:
+                    warnings.warn(
+                        f"Preferred GUI backend 'TkAgg' unavailable; falling back to 'Agg': {exc}",
+                        RuntimeWarning,
+                    )
+                    matplotlib.use("Agg")
+            else:
+                matplotlib.use("Agg")
+
+    _ensure_backend()
+except Exception:
+    # If matplotlib is not available at import time, _render_graph will raise
+    # a clear error when called; importing this module should still succeed.
+    pass
+
 __all__ = ["render_graph_tool", "_render_graph"]
 
 
