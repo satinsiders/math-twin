@@ -192,6 +192,10 @@ def _micro_verify_sympy(state: MicroState) -> MicroState:
 
 
 def _micro_solve_sympy(state: MicroState) -> MicroState:
+    # Only attempt solving when the system appears determined
+    if state.eq_count == 0 or state.degrees_of_freedom != 0:
+        state.skip_qa = True
+        return state
     target = _infer_target_var(state)
     sols: list[str] = []
     if target:

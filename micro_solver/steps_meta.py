@@ -8,25 +8,28 @@ stages can decide whether a replan is required.
 """
 
 from .state import MicroState
+from .sym_utils import estimate_jacobian_rank
 
 
 def _micro_monitor_dof(state: MicroState) -> MicroState:
     """Track a rough degrees‑of‑freedom estimate.
 
-    The count is simply ``(#unknowns - #equalities)`` which is sufficient to flag
-    obviously under‑determined systems. Inequalities are tracked separately as
-    they help prune branches but do not reduce degrees of freedom.  The result is
-    stored on the state for downstream heuristics.
+    The count uses a Jacobian rank estimator on equality relations. Inequalities
+    are tracked separately as they help prune branches but do not reduce degrees
+    of freedom.  The result is stored on the state for downstream heuristics.
     """
 
     unknowns = [v for v in state.variables + state.parameters if v not in state.env]
-    eq_count = sum(1 for r in state.relations if "=" in r) + len(state.equations)
+    eq_relations = [r for r in state.relations if "=" in r] + list(state.equations)
+    eq_count = len(eq_relations)
     ineq_count = sum(
         1 for r in state.relations if any(op in r for op in ("<", ">", "≤", "≥")) and "=" not in r
     )
 
+    rank = estimate_jacobian_rank(eq_relations, unknowns)
     state.eq_count = eq_count
     state.ineq_count = ineq_count
-    state.degrees_of_freedom = len(unknowns) - eq_count
-    state.needs_replan = state.degrees_of_freedom > 0
+    state.jacobian_rank = rank
+    state.degrees_of_freedom = len(unknowns) - rank
+    state.needs_replan = state.degrees_of_freedom != 0
     return state

@@ -51,6 +51,7 @@ class MicroState:
     # Meta‑reasoning stats
     eq_count: int = 0
     ineq_count: int = 0
+    jacobian_rank: int = 0
     degrees_of_freedom: int = 0
     needs_replan: bool = False
 
