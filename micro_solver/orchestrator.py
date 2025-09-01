@@ -19,6 +19,7 @@ from agents.run import Runner as AgentsRunner  # type: ignore
 
 from .state import MicroState
 from .agents import MicroQAAgent
+from .certificate import build_certificate
 
 
 @dataclass
@@ -382,4 +383,8 @@ class MicroRunner:
                 pass
 
             self.logger.info("[micro-solver] final solution: %s", fallback_msg)
+        try:
+            state.certificate = build_certificate(state)
+        except Exception:
+            pass
         return state
