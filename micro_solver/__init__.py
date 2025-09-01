@@ -16,7 +16,13 @@ from .orchestrator import MicroGraph, MicroRunner  # noqa: F401
 from . import agents as micro_agents  # noqa: F401
 from . import steps as micro_steps  # noqa: F401
 from .candidate import Candidate  # noqa: F401
-from .operators import Operator, SimplifyOperator, SubstituteOperator, FeasibleSampleOperator  # noqa: F401
+from .operators import (
+    Operator,
+    SimplifyOperator,
+    SubstituteOperator,
+    FeasibleSampleOperator,
+    VerifyOperator,
+)  # noqa: F401
 from .scheduler import solve  # noqa: F401
 
 __all__ = [
@@ -30,6 +36,7 @@ __all__ = [
     "SimplifyOperator",
     "SubstituteOperator",
     "FeasibleSampleOperator",
+    "VerifyOperator",
     "solve",
 ]
 

@@ -7,6 +7,7 @@ from typing import Sequence
 from .state import MicroState
 from .operators import Operator
 from .steps_meta import _micro_monitor_dof
+from .certificate import build_certificate
 
 
 def update_metrics(state: MicroState) -> MicroState:
@@ -62,4 +63,8 @@ def solve(state: MicroState, operators: Sequence[Operator], *, max_iters: int = 
             state.stalls += 1
         else:
             state.stalls = 0
+    try:
+        state.certificate = build_certificate(state)
+    except Exception:
+        pass
     return state
