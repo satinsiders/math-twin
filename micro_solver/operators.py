@@ -8,10 +8,10 @@ observed progress rather than a fixed strategy tree.
 """
 
 from dataclasses import dataclass
-from typing import Iterable, Tuple
+from typing import Tuple
 
 from .state import MicroState
-from .sym_utils import rewrite_relations, simplify_expr
+from .sym_utils import rewrite_relations, simplify_expr, verify_candidate
 
 
 class Operator:
@@ -75,4 +75,25 @@ class FeasibleSampleOperator(Operator):
 
         sample = {v: random.random() for v in state.variables}
         state.derived["sample"] = sample
+        return state, 0.0
+
+
+@dataclass
+class VerifyOperator(Operator):
+    """Verify the latest candidate against original relations."""
+
+    name: str = "verify"
+
+    def applicable(self, state: MicroState) -> bool:  # pragma: no cover - trivial
+        return bool(state.candidate_answers) and state.final_answer is None
+
+    def apply(self, state: MicroState) -> Tuple[MicroState, float]:
+        try:
+            candidate = str(state.candidate_answers[-1])
+        except Exception:
+            return state, 0.0
+        var = state.variables[0] if state.variables else None
+        if verify_candidate(state.relations, candidate, varname=var):
+            state.final_answer = candidate
+            return state, 1.0
         return state, 0.0
