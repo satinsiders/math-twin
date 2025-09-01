@@ -31,5 +31,6 @@ def _micro_monitor_dof(state: MicroState) -> MicroState:
     state.ineq_count = ineq_count
     state.jacobian_rank = rank
     state.degrees_of_freedom = len(unknowns) - rank
-    state.needs_replan = state.degrees_of_freedom != 0
+    # ``needs_replan`` is controlled externally and should not be
+    # overwritten simply because degrees of freedom remain non-zero.
     return state
