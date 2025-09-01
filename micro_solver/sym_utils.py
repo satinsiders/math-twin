@@ -155,6 +155,51 @@ def evaluate_numeric(expr_str: str) -> tuple[bool, Any]:  # noqa: ANN401 - gener
         return False, None
 
 
+def evaluate_with_env(expr_str: str, env: dict[str, Any]) -> tuple[bool, Any]:  # noqa: ANN401 - generic
+    """Evaluate an expression with substitutions from env.
+
+    - Substitutes any symbols present in env when their values are numeric‑like.
+    - Returns (ok, numeric_value) if fully evaluable; otherwise (False, None).
+    """
+    try:
+        import sympy as sp
+        from sympy.parsing.sympy_parser import (
+            implicit_multiplication_application,
+            parse_expr,
+            standard_transformations,
+        )
+        expr = parse_expr(str(expr_str), transformations=(*standard_transformations, implicit_multiplication_application))
+        subs_map: dict[Any, Any] = {}
+        for k, v in (env or {}).items():
+            try:
+                if isinstance(v, (int, float)):
+                    subs_map[sp.Symbol(str(k))] = v
+                elif isinstance(v, str):
+                    # Try parsing string numeric
+                    ok, val = evaluate_numeric(v)
+                    if ok:
+                        subs_map[sp.Symbol(str(k))] = val
+            except Exception:
+                continue
+        if subs_map:
+            expr = expr.subs(subs_map)
+        try:
+            expr = sp.simplify(expr)
+        except Exception:
+            pass
+        if getattr(expr, "free_symbols", set()):
+            return False, None
+        try:
+            valf = float(expr)
+            if abs(valf - round(valf)) < 1e-9:
+                return True, int(round(valf))
+            return True, valf
+        except Exception:
+            return False, None
+    except Exception:
+        return False, None
+
+
 def _clean_for_sympy(s: str) -> str:
     """Best-effort cleanup of natural-language tails and Unicode quirks.
 
@@ -293,6 +338,16 @@ def rewrite_relations(relations: list[str], step: dict) -> list[str]:
                 new_rels.append(r)
         return new_rels
 
+    if "normalize" in action:
+        # Alias for simplify
+        for r in relations:
+            try:
+                L, R = _lr(r)
+                new_rels.append(f"{sp.sstr(sp.simplify(L))} = {sp.sstr(sp.simplify(R))}")
+            except Exception:
+                new_rels.append(r)
+        return new_rels
+
     if "expand" in action:
         for r in relations:
             try:
@@ -331,6 +386,84 @@ def rewrite_relations(relations: list[str], step: dict) -> list[str]:
                 return new_rels
             except Exception:
                 return relations
+
+    # Bind a numeric-evaluable expression directly into a target symbol
+    if "bind_numeric" in action:
+        tgt = str(args.get("target", "")).strip()
+        expr = str(args.get("expr", "")).strip()
+        if tgt and expr:
+            try:
+                ok, val = evaluate_with_env(expr, {})  # no env here; caller may have substituted
+            except Exception:
+                ok, val = False, None
+            if not ok:
+                try:
+                    ok, val = evaluate_numeric(expr)
+                except Exception:
+                    ok = False
+            if ok:
+                try:
+                    L = _parse_expr(tgt.split("=", 1)[0] if "=" in tgt else tgt)
+                    R = _parse_expr(str(val))
+                    return relations + [f"{sp.sstr(L)} = {sp.sstr(R)}"]
+                except Exception:
+                    return relations
+
+    # Isolate a symbol on one side: append a solved assignment if possible
+    if "isolate_symbol" in action or "isolate" in action:
+        sym_name = str(args.get("symbol", "")).strip()
+        if not sym_name:
+            return relations
+        try:
+            sym = sp.Symbol(sym_name)
+        except Exception:
+            return relations
+        for r in relations:
+            try:
+                L, R = _lr(r)
+                sol = sp.solve(sp.Eq(L, R), sym, dict=True)
+                if sol:
+                    val = sol[0].get(sym)
+                    if val is not None:
+                        return relations + [f"{sp.sstr(sym)} = {sp.sstr(val)}"]
+            except Exception:
+                continue
+        return relations
+
+    # Eliminate a symbol by solving and substituting across relations
+    if "eliminate_symbol" in action or "eliminate" in action:
+        sym_name = str(args.get("symbol", "")).strip()
+        if not sym_name:
+            return relations
+        try:
+            sym = sp.Symbol(sym_name)
+        except Exception:
+            return relations
+        # Try to get an explicit expression for the symbol, then substitute
+        expr_val = None
+        for r in relations:
+            try:
+                L, R = _lr(r)
+                sol = sp.solve(sp.Eq(L, R), sym, dict=True)
+                if sol:
+                    val = sol[0].get(sym)
+                    if val is not None:
+                        expr_val = val
+                        break
+            except Exception:
+                continue
+        if expr_val is None:
+            return relations
+        out: list[str] = []
+        for r in relations:
+            try:
+                L, R = _lr(r)
+                L2 = L.subs({sym: expr_val})
+                R2 = R.subs({sym: expr_val})
+                out.append(f"{sp.sstr(L2)} = {sp.sstr(R2)}")
+            except Exception:
+                out.append(r)
+        return out
     return relations
 
 

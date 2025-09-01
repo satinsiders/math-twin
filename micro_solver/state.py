@@ -23,9 +23,14 @@ class MicroState:
     normalized_text: Optional[str] = None
     sentences: list[str] = field(default_factory=list)
     tokens: list[str] = field(default_factory=list)
+    tokens_per_sentence: list[list[str]] = field(default_factory=list)
     quantities: list[dict[str, Any]] = field(default_factory=list)  # {value, unit?, sentence_idx}
     variables: list[str] = field(default_factory=list)
     constants: list[str] = field(default_factory=list)
+    identifiers: list[str] = field(default_factory=list)
+    points: list[str] = field(default_factory=list)
+    functions: list[str] = field(default_factory=list)
+    parameters: list[str] = field(default_factory=list)
     relations: list[str] = field(default_factory=list)  # e.g., "2x+3=11", "x>0"
     goal: Optional[str] = None  # e.g., "solve for x"
     problem_type: Optional[str] = None  # e.g., "linear", "quadratic", "ratio", "geometry"...
@@ -56,4 +61,3 @@ class MicroState:
     # Orchestration hints
     skip_qa: bool = False
     next_steps: Optional[list] = None  # injected micro‑steps for dynamic plans
-

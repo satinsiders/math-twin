@@ -19,7 +19,6 @@ from agents.run import Runner as AgentsRunner  # type: ignore
 
 from .state import MicroState
 from .agents import MicroQAAgent
-from .plan_policy import lint_plan
 
 
 @dataclass
@@ -37,17 +36,7 @@ class MicroRunner:
         self.logger.setLevel(logging.INFO if verbose else logging.WARNING)
 
     def _qa(self, step_name: str, before: MicroState, after: MicroState, out_obj: Any) -> tuple[bool, str]:  # noqa: ANN401 - generic
-        # Deterministic prechecks for specific steps
-        try:
-            if step_name == "decompose":
-                res = lint_plan(after.plan_steps or [])
-                if not res.get("ok", True):
-                    issues = res.get("issues", [])
-                    reason = issues[0] if issues else "plan-policy-violation"
-                    return False, reason
-        except Exception:
-            # If precheck fails internally, fall back to QAAgent
-            pass
+        # (Legacy static-plan prechecks removed; dynamic atomic planning is used.)
         try:
             payload = json.dumps({
                 "step": step_name,
@@ -95,7 +84,13 @@ class MicroRunner:
         def _build_step_out(step_name: str, before: MicroState, after: MicroState) -> dict[str, Any]:  # noqa: ANN401 - generic
             try:
                 if step_name == "tokenize":
-                    return {"sentences": after.sentences, "tokens": after.tokens}
+                    out = {"sentences": after.sentences, "tokens": after.tokens}
+                    try:
+                        if getattr(after, "tokens_per_sentence", None):
+                            out["tokens_per_sentence"] = after.tokens_per_sentence
+                    except Exception:
+                        pass
+                    return out
                 if step_name == "entities":
                     return {"variables": after.variables, "constants": after.constants, "quantities": after.quantities}
                 if step_name == "relations":
@@ -115,7 +110,46 @@ class MicroRunner:
                 if step_name == "decompose":
                     return {"plan_steps": after.plan_steps}
                 if step_name == "execute_plan":
-                    return {"current_step_idx": after.current_step_idx, "relations": after.relations}
+                    atomic = None
+                    score = None
+                    delta = None
+                    eqc = None
+                    nev = None
+                    frees = None
+                    t_bound = None
+                    t_unbound = None
+                    solv = None
+                    try:
+                        if isinstance(after.derived, dict):
+                            atomic = after.derived.get("atomic_iters")
+                            score = after.derived.get("progress_score")
+                            delta = after.derived.get("progress_delta")
+                            eqc = after.derived.get("eq_count")
+                            nev = after.derived.get("num_evaluable")
+                            frees = after.derived.get("free_symbols")
+                            t_bound = after.derived.get("target_bound")
+                            t_unbound = after.derived.get("target_unbound")
+                            solv = after.derived.get("numeric_solvable")
+                    except Exception:
+                        atomic = None
+                    out = {"current_step_idx": after.current_step_idx, "relations": after.relations, "atomic_iters": atomic}
+                    if score is not None:
+                        out["progress_score"] = score
+                    if delta is not None:
+                        out["progress_delta"] = delta
+                    if eqc is not None:
+                        out["eq_count"] = eqc
+                    if nev is not None:
+                        out["num_evaluable"] = nev
+                    if frees is not None:
+                        out["free_symbols"] = frees
+                    if t_bound is not None:
+                        out["target_bound"] = t_bound
+                    if t_unbound is not None:
+                        out["target_unbound"] = t_unbound
+                    if solv is not None:
+                        out["numeric_solvable"] = solv
+                    return out
                 if step_name == "extract_candidate":
                     last = after.candidate_answers[-1] if after.candidate_answers else None
                     return {"candidate": last}
@@ -184,7 +218,49 @@ class MicroRunner:
                             pass
                     return f"plan_steps={len(steps)}: {_trunc(', '.join(acts))}"
                 if step_name == "execute_plan":
-                    return f"idx={after.current_step_idx}/{len(after.plan_steps or [])} relations={len(after.relations)}"
+                    atomic = None
+                    score = None
+                    delta = None
+                    eqc = None
+                    nev = None
+                    frees = None
+                    t_bound = None
+                    t_unbound = None
+                    solv = None
+                    try:
+                        if isinstance(after.derived, dict):
+                            atomic = after.derived.get("atomic_iters")
+                            score = after.derived.get("progress_score")
+                            delta = after.derived.get("progress_delta")
+                            eqc = after.derived.get("eq_count")
+                            nev = after.derived.get("num_evaluable")
+                            frees = after.derived.get("free_symbols")
+                            t_bound = after.derived.get("target_bound")
+                            t_unbound = after.derived.get("target_unbound")
+                            solv = after.derived.get("numeric_solvable")
+                    except Exception:
+                        atomic = None
+                    base = f"idx={after.current_step_idx}/{len(after.plan_steps or [])} relations={len(after.relations)}"
+                    tail = ""
+                    if atomic is not None:
+                        tail += f" atomic={atomic}"
+                    if score is not None:
+                        tail += f" score={score}"
+                    if delta is not None:
+                        tail += f" Δ={delta}"
+                    if eqc is not None:
+                        tail += f" eq={eqc}"
+                    if nev is not None:
+                        tail += f" eval={nev}"
+                    if frees is not None:
+                        tail += f" free={frees}"
+                    if t_bound is not None:
+                        tail += f" tbound={t_bound}"
+                    if t_unbound is not None:
+                        tail += f" tunbound={t_unbound}"
+                    if solv is not None:
+                        tail += f" solv={solv}"
+                    return base + tail
                 if step_name == "extract_candidate":
                     cand = after.candidate_answers[-1] if after.candidate_answers else None
                     return f"candidate='{_trunc(cand)}'"

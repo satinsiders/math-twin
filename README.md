@@ -42,6 +42,25 @@ Optional agents such as **SymbolicSolveAgent** and **SymbolicSimplifyAgent** han
 
 For ultra‑granular math solving, this repo includes a micro‑solver (see `docs/micro_solver.md`). It decomposes solving into tiny, verifiable micro‑steps aligned with the cognitive flow recognition → reasoning → calculation. Each micro‑step is handled by a narrowly scoped agent with strict I/O and micro‑QA after every step. The micro‑solver is additive and does not alter the twin generation pipeline.
 
+### Micro‑Solver Philosophy
+
+- General over special‑cases: avoid hard‑coding solutions or per‑problem fallbacks. We use small agents to decompose tasks and rely on QA + retries to drive correctness, rather than wiring bespoke solvers for specific prompts.
+- Atomic steps with semantics: plans should contain generic, reusable actions (e.g., `substitute`, `expand`, `state_dp`, `transfer_matrix_step`, `count_configurations`) that apply across many problems. Execution may be done by deterministic utilities or a constrained agent, but never by injecting single‑use code paths.
+- Micro‑QA at every step: after each step we run a minimal checker to validate structure and basic invariants; failures feed directly into the next attempt as feedback.
+- Deterministic where cheap, LLM where valuable: symbolic rewrites and numeric evaluation use lightweight local helpers; when a step’s semantics go beyond simple algebra (e.g., a DP transition), a general‑purpose executor agent handles it under the same QA discipline.
+
+This perspective is the guiding constraint for all changes going forward and replaces any temptation to add one‑off special rules.
+
+### Fixing Pipeline Mismatch Holistically
+
+We saw a failure mode where the plan used counting actions (`transfer_matrix_step`, `state_dp`, `count_configurations`), but the executor only performed algebraic rewrites. That produced symbolic leftovers and a non‑numeric candidate. Instead of adding a one‑off enumerator, we made two general changes:
+
+- Atomic, dynamic execution: added an `AtomicPlannerAgent` that proposes the next single atomic action from current state (no full end‑to‑end plan required). The executor now runs a dynamic loop of plan→execute→QA until the target is computed (or no progress), mirroring how humans work step‑by‑step. File: `micro_solver/agents.py` (`AtomicPlannerAgent`), `micro_solver/steps.py` (`_micro_execute_plan`).
+- Step execution, generalized: added a `StepExecutorAgent` to execute non‑algebraic atomic actions and return updated relations plus `env_delta` bindings (e.g., `L=3`, `P_total=93/13`, `m=93`, `n=13`). The runner falls back to this agent when deterministic/`RewriteAgent` rewrites don’t advance. Files: `micro_solver/agents.py` (`StepExecutorAgent`), `micro_solver/steps.py` (`_micro_execute_plan`).
+- Result synthesis and typing: added a `CandidateSynthesizerAgent` and updated extraction to prefer evaluating the canonical target (e.g., `m+n`) from `env` values directly. When a numeric value is available, it’s stored as an integer (not a string) to make QA deterministic. Files: `micro_solver/agents.py` (`CandidateSynthesizerAgent`), `micro_solver/steps.py` (`_micro_extract_candidate`).
+
+Together, these upgrades keep the approach general, let plans propose powerful but reusable actions, and still preserve the QA+retry discipline — without introducing special‑case solvers.
+
 ## Installation
 
 This project requires **Python 3.10+** and the official `openai` package. Install in editable mode with development dependencies:
