@@ -246,6 +246,37 @@ def parse_relation_sides(rel: str) -> Tuple[str, str, str]:
     return op, lhs.strip(), rhs.strip()
 
 
+def estimate_jacobian_rank(relations: Iterable[str], variables: Iterable[str]) -> int:
+    """Estimate Jacobian rank of equality relations with respect to variables.
+
+    Best effort: parses relations via ``parse_relation_sides`` and uses
+    SymPy's ``jacobian().rank()``. Falls back to a conservative heuristic when
+    parsing or rank computation fails.
+    """
+    try:
+        import sympy as sp
+
+        exprs = []
+        for r in relations:
+            op, lhs, rhs = parse_relation_sides(r)
+            if op == "=":
+                try:
+                    exprs.append(_parse_expr(lhs) - _parse_expr(rhs))
+                except Exception:
+                    continue
+        if not exprs or not variables:
+            return 0
+        syms = [sp.Symbol(str(v)) for v in variables]
+        J = sp.Matrix(exprs).jacobian(syms)
+        return int(J.rank())
+    except Exception:
+        # Fallback: rank cannot exceed min(#eqs, #vars)
+        try:
+            return min(len(list(relations)), len(list(variables)))
+        except Exception:
+            return 0
+
+
 def rewrite_relations(relations: list[str], step: dict) -> list[str]:
     """Apply a small set of deterministic algebraic rewrites to relations.
 
