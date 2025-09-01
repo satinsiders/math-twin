@@ -1,0 +1,30 @@
+import pathlib
+import sys
+
+sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
+
+import micro_solver.agents as A
+from micro_solver.state import MicroState
+from micro_solver.steps_execution import _micro_execute_plan
+
+
+def test_skip_repeated_atomic(monkeypatch):
+    calls = {"planner": 0, "executor": 0}
+
+    def fake_invoke(agent, payload, qa_feedback=None):
+        if agent is A.AtomicPlannerAgent:
+            calls["planner"] += 1
+            return ({"steps": [{"action": "simplify", "args": {}}]}, None)
+        if agent is A.StepExecutorAgent:
+            calls["executor"] += 1
+            return ({}, None)
+        # Force other agents to be skipped
+        return ({}, "err")
+
+    monkeypatch.setattr("micro_solver.steps_execution._invoke", fake_invoke)
+
+    state = MicroState(goal="test", relations=["x = x"], env={})
+    _micro_execute_plan(state, max_iters=10)
+
+    assert calls["executor"] == 1
+    assert state.relations == ["x = x"]

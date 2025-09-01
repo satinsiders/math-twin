@@ -7,230 +7,18 @@ from .state import MicroState
 from . import agents as A
 from .steps_util import _invoke
 from .sym_utils import evaluate_numeric, evaluate_with_env, rewrite_relations, parse_relation_sides
-
+from .steps_execution_utils import (
+    maybe_eval_target,
+    promote_env_from_relations,
+    stable_unique,
+    state_digest,
+    progress_metrics,
+)
 
 logger = logging.getLogger("micro_solver.steps")
 
 
 def _micro_execute_plan(state: MicroState, *, max_iters: Optional[int] = None) -> MicroState:
-    def _local_qa(prev_relations: list[str], prev_idx: int) -> tuple[bool, str]:
-        try:
-            changed = (state.relations != prev_relations) or (state.current_step_idx != prev_idx)
-            if not state.relations:
-                return False, "empty-relations-after-rewrite"
-            if not changed:
-                return False, "no-change-after-rewrite"
-            return True, "pass"
-        except Exception as exc:  # pragma: no cover
-            return False, f"qa-error:{exc}"
-
-    def _maybe_eval_target() -> bool:
-        try:
-            target_expr = None
-            if isinstance(state.canonical_repr, dict):
-                target_expr = state.canonical_repr.get("target")
-            if isinstance(target_expr, str) and target_expr.strip():
-                ok, val = evaluate_with_env(target_expr, state.env or {})
-                if ok:
-                    # Record as a candidate only; defer finalization to verify step
-                    state.candidate_answers.append(val)
-                    return True
-        except Exception:
-            pass
-        return False
-
-    import re as _re
-
-    def _promote_env_from_relations() -> None:
-        try:
-            for r in state.relations or []:
-                op, lhs, rhs = parse_relation_sides(r)
-                if op != "=":
-                    continue
-                name = (lhs or "").strip()
-                if not _re.match(r"^[A-Za-z][A-Za-z0-9_]*$", name):
-                    continue
-                ok, val = evaluate_with_env(rhs, state.env or {})
-                if ok:
-                    try:
-                        state.env[name] = val
-                    except Exception:
-                        pass
-        except Exception:
-            pass
-
-    def _stable_unique(items: list[str]) -> list[str]:
-        seen: set[str] = set()
-        out: list[str] = []
-        for s in items:
-            if s not in seen:
-                seen.add(s)
-                out.append(s)
-        return out
-
-    def _state_digest() -> str:
-        try:
-            import hashlib
-            rel_key = "|".join(sorted(map(str, state.relations or [])))
-            env_items = ",".join(f"{k}={state.env.get(k)}" for k in sorted(state.env.keys()))
-            h = hashlib.md5()
-            h.update(rel_key.encode("utf-8", errors="ignore"))
-            h.update(env_items.encode("utf-8", errors="ignore"))
-            return h.hexdigest()
-        except Exception:
-            return ""
-
-    def _target_symbols() -> set[str]:
-        try:
-            import sympy as sp
-            from sympy.parsing.sympy_parser import (
-                implicit_multiplication_application,
-                parse_expr,
-                standard_transformations,
-            )
-            transformations = (*standard_transformations, implicit_multiplication_application)
-            tgt = (state.canonical_repr or {}).get("target") if isinstance(state.canonical_repr, dict) else None
-            if isinstance(tgt, str) and tgt.strip():
-                expr = parse_expr(tgt, transformations=transformations)
-                return {str(s) for s in getattr(expr, "free_symbols", set())}
-        except Exception:
-            pass
-        return set()
-
-    def _numeric_solvable_count(relations: list[str], symbols: set[str]) -> int:
-        # Count how many given symbols admit a numeric solution from the current relations
-        try:
-            import sympy as sp
-            from sympy.parsing.sympy_parser import (
-                implicit_multiplication_application,
-                parse_expr,
-                standard_transformations,
-            )
-            transformations = (*standard_transformations, implicit_multiplication_application)
-            eqs: list[sp.Eq] = []
-            for r in relations:
-                try:
-                    op, lhs, rhs = parse_relation_sides(r)
-                    if op != "=":
-                        continue
-                    eL = parse_expr(lhs, transformations=transformations)
-                    eR = parse_expr(rhs, transformations=transformations)
-                    eqs.append(sp.Eq(eL, eR))
-                except Exception:
-                    continue
-            count = 0
-            for name in symbols:
-                try:
-                    sym = sp.Symbol(name)
-                    sol = sp.solve(eqs, sym, dict=True)
-                    if sol and sol[0].get(sym) is not None:
-                        val = sol[0][sym]
-                        if not getattr(val, "free_symbols", set()):
-                            count += 1
-                except Exception:
-                    continue
-            return count
-        except Exception:
-            return 0
-
-    def _progress_metrics() -> tuple[float, int, int, int, int, int, int]:
-        # Returns (score, eq_count, num_evaluable, free_sym_count, target_bound, target_unbound, num_solvable)
-        score = 0.0
-        try:
-            import sympy as sp
-            from sympy.parsing.sympy_parser import (
-                implicit_multiplication_application,
-                parse_expr,
-                standard_transformations,
-            )
-            transformations = (*standard_transformations, implicit_multiplication_application)
-        except Exception:
-            sp = None  # type: ignore
-            transformations = None  # type: ignore
-        try:
-            score += 2.0 * float(len(state.env or {}))
-        except Exception:
-            pass
-        num_evaluable = 0
-        free_syms: set[str] = set()
-        eq_count = 0
-        # Collect all symbols from relations for solvability check
-        all_syms: set[str] = set()
-        for r in state.relations or []:
-            try:
-                op, lhs, rhs = parse_relation_sides(r)
-                if op == "":
-                    ok, _ = evaluate_with_env(lhs, state.env or {})
-                    if not ok:
-                        ok, _ = evaluate_numeric(lhs)
-                    if ok:
-                        num_evaluable += 1
-                else:
-                    okL, _L = evaluate_with_env(lhs, state.env or {})
-                    okR, _R = evaluate_with_env(rhs, state.env or {})
-                    if not okL:
-                        okL, _L = evaluate_numeric(lhs)
-                    if not okR:
-                        okR, _R = evaluate_numeric(rhs)
-                    if okL and okR:
-                        num_evaluable += 1
-                if op == "=":
-                    eq_count += 1
-                if sp and transformations:
-                    try:
-                        eL = parse_expr(lhs, transformations=transformations)
-                        eR = parse_expr(rhs or "0", transformations=transformations)
-                        symset = getattr(eL, "free_symbols", set()) | getattr(eR, "free_symbols", set())
-                        for s in symset:
-                            free_syms.add(str(s))
-                            all_syms.add(str(s))
-                    except Exception:
-                        pass
-            except Exception:
-                pass
-        score += 1.0 * float(num_evaluable)
-        try:
-            score -= 0.5 * float(len(free_syms))
-        except Exception:
-            pass
-        # Target-aware bonuses/penalties
-        tgt_syms = _target_symbols()
-        bound = 0
-        try:
-            for t in tgt_syms:
-                if t in (state.env or {}):
-                    bound += 1
-        except Exception:
-            pass
-        try:
-            target_expr = (state.canonical_repr or {}).get("target") if isinstance(state.canonical_repr, dict) else None
-            if isinstance(target_expr, str) and target_expr.strip():
-                ok, _ = evaluate_with_env(target_expr, state.env or {})
-                if ok:
-                    score += 5.0
-        except Exception:
-            pass
-        # Bonus for more equalities (more constraints)
-        score += 0.3 * float(eq_count)
-        # Numeric-solvable symbols (target-aware priority): try target symbols first, then all symbols
-        num_solvable = 0
-        try:
-            if tgt_syms:
-                num_solvable += _numeric_solvable_count(state.relations, tgt_syms)
-            # Also include general solvability for others (light weight)
-            others = set(all_syms) - set(tgt_syms)
-            if others:
-                num_solvable += max(0, _numeric_solvable_count(state.relations, others))
-        except Exception:
-            pass
-        # Target binding/penalty
-        score += 3.0 * float(bound)
-        unbound = max(0, len(tgt_syms) - bound)
-        score -= 0.7 * float(unbound)
-        # Reward newly-solvable symbols
-        score += 1.0 * float(num_solvable)
-        return score, eq_count, num_evaluable, len(free_syms), bound, unbound, num_solvable
-
     iters = 0
     n = len(state.plan_steps or [])
     no_progress = 0
@@ -248,10 +36,10 @@ def _micro_execute_plan(state: MicroState, *, max_iters: Optional[int] = None) -
     attempted: set[str] = set()
     last_env = dict(state.env)
     while tries < budget:
-        if _maybe_eval_target():
+        if maybe_eval_target(state):
             # Update progress in derived and log
             try:
-                ps, eqc, nev, frees = _progress_metrics()
+                ps, eqc, nev, frees = progress_metrics(state)
                 state.derived["progress_score"] = ps
                 state.derived["progress_delta"] = None
                 state.derived["atomic_iters"] = tries
@@ -292,7 +80,7 @@ def _micro_execute_plan(state: MicroState, *, max_iters: Optional[int] = None) -
             continue
 
         # Evaluate candidates by simulated progress
-        base_score, base_eqc, base_nev, base_free, base_bound, base_unbound, base_solv = _progress_metrics()
+        base_score, base_eqc, base_nev, base_free, base_bound, base_unbound, base_solv = progress_metrics(state)
         best_step = None
         best_score = -1e9
         for cand in steps_prop[:3]:
@@ -301,7 +89,7 @@ def _micro_execute_plan(state: MicroState, *, max_iters: Optional[int] = None) -
                 args_c = cand.get("args") if isinstance(cand.get("args"), dict) else {}
             except Exception:
                 continue
-            key = f"{act_c}|{str(args_c)}|{_state_digest()}"
+            key = f"{act_c}|{str(args_c)}|{state_digest(state)}"
             if key in attempted:
                 continue
             sim_rels = rewrite_relations(state.relations, cand)
@@ -310,7 +98,7 @@ def _micro_execute_plan(state: MicroState, *, max_iters: Optional[int] = None) -
                 saved = state.relations
                 try:
                     state.relations = sim_rels
-                    sim_score, _, _, _, _, _, _ = _progress_metrics()
+                    sim_score, _, _, _, _, _, _ = progress_metrics(state)
                 finally:
                     state.relations = saved
             else:
@@ -318,13 +106,26 @@ def _micro_execute_plan(state: MicroState, *, max_iters: Optional[int] = None) -
             if sim_score > best_score:
                 best_score = sim_score
                 best_step = cand
-        step2 = best_step or steps_prop[0]
+
+        if best_step is None:
+            state.qa_feedback = "no-atomic-step"
+            logger.info(
+                "[micro-solver] iterate atomic %d: planner produced only repeated steps",
+                tries + 1,
+            )
+            no_progress += 1
+            if no_progress >= 5:
+                logger.info("[micro-solver] execute_plan: no further progress; exiting loop")
+                break
+            continue
+
+        step2 = best_step
         try:
             act = str(step2.get("action", "")).lower()
             args = step2.get("args") if isinstance(step2.get("args"), dict) else {}
         except Exception:
             act, args = "", {}
-        attempted.add(f"{act}|{str(args)}|{_state_digest()}")
+        attempted.add(f"{act}|{str(args)}|{state_digest(state)}")
         logger.info("[micro-solver] iterate atomic %d: action %s", tries + 1, str(step2.get("action")))
 
         prev_rel = list(state.relations)
@@ -529,14 +330,14 @@ def _micro_execute_plan(state: MicroState, *, max_iters: Optional[int] = None) -
 
         if new_rels2:
             if from_se:
-                state.relations = _stable_unique(list(state.relations) + list(new_rels2))
+                state.relations = stable_unique(list(state.relations) + list(new_rels2))
             else:
-                state.relations = _stable_unique(new_rels2)
-            _promote_env_from_relations()
+                state.relations = stable_unique(new_rels2)
+            promote_env_from_relations(state)
 
         try:
             # Progress logging
-            new_score, new_eqc, new_nev, new_free, new_bound, new_unbound, new_solv = _progress_metrics()
+            new_score, new_eqc, new_nev, new_free, new_bound, new_unbound, new_solv = progress_metrics(state)
             delta = new_score - prev_score
             logger.info(
                 "[micro-solver] iterate atomic %d: out relations=%d env_keys=%d score=%.2f Δ=%.2f",
@@ -572,7 +373,7 @@ def _micro_execute_plan(state: MicroState, *, max_iters: Optional[int] = None) -
                 ok2, reason2 = False, "assign-invalid"
             elif "assign" in act and (state.env == prev_env):
                 ok2, reason2 = False, "assign-without-env-change"
-            elif state.derived.get("progress_delta", 0) <= 0 and not _maybe_eval_target() and not (improved_structure or improved_target or improved_solvable):
+            elif state.derived.get("progress_delta", 0) <= 0 and not maybe_eval_target(state) and not (improved_structure or improved_target or improved_solvable):
                 ok2, reason2 = False, "no-progress-score"
             else:
                 ok2, reason2 = True, "pass"
@@ -628,7 +429,7 @@ def _micro_execute_plan(state: MicroState, *, max_iters: Optional[int] = None) -
                                     val = sol[0].get(sym)
                                     if val is not None and not getattr(val, "free_symbols", set()):
                                         name = str(sym)
-                                        state.relations = _stable_unique(list(state.relations) + [f"{name} = {sp.sstr(val)}"]) 
+                                        state.relations = stable_unique(list(state.relations) + [f"{name} = {sp.sstr(val)}"]) 
                                         try:
                                             vfloat = float(val)
                                             state.env[name] = int(round(vfloat)) if abs(vfloat - round(vfloat)) < 1e-9 else vfloat
@@ -646,7 +447,7 @@ def _micro_execute_plan(state: MicroState, *, max_iters: Optional[int] = None) -
 
     # Final progress record
     try:
-        ps, eqc, nev, frees = _progress_metrics()
+        ps, eqc, nev, frees = progress_metrics(state)
         state.derived["progress_score"] = ps
         state.derived["atomic_iters"] = tries
         state.derived["eq_count"] = eqc

@@ -26,6 +26,7 @@ from .steps_candidate import (
     _micro_simplify_candidate_sympy,
     _micro_verify_sympy,
 )
+from .steps_meta import _micro_monitor_dof
 
 
 # Convenience top‑level graph for a simple end‑to‑end solve pass
@@ -42,6 +43,7 @@ DEFAULT_MICRO_STEPS = [
     _micro_strategies,
     _micro_choose_strategy,
     _micro_execute_plan,
+    _micro_monitor_dof,
 ]
 
 
@@ -65,6 +67,7 @@ def build_steps(*, max_iters: Optional[int] = None) -> list:
         _micro_strategies,
         _micro_choose_strategy,
         _exec,
+        _micro_monitor_dof,
         _micro_solve_sympy,
         _micro_extract_candidate,
         _micro_simplify_candidate_sympy,

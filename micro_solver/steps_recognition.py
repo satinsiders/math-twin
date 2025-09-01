@@ -29,23 +29,24 @@ def _micro_tokenize(state: MicroState) -> MicroState:
         return state
     try:
         state.sentences = list(map(str, out.get("sentences", [])))
-        # Accept tokens_per_sentence when provided; otherwise adapt if 'tokens' is nested
         tps = out.get("tokens_per_sentence")
         tok = out.get("tokens")
+
         tokens_per_sentence: list[list[str]] = []
-        flat_tokens: list[str] = []
         if isinstance(tps, list) and all(isinstance(row, list) for row in tps):
-            tokens_per_sentence = [[str(tok) for tok in row] for row in tps]
-            for row in tokens_per_sentence:
-                flat_tokens.extend(row)
+            tokens_per_sentence = [[str(x) for x in row] for row in tps]
         elif isinstance(tok, list) and tok and all(isinstance(row, list) for row in tok):
             # Some models may put nested lists under 'tokens'
             tokens_per_sentence = [[str(x) for x in row] for row in tok]
-            for row in tokens_per_sentence:
-                flat_tokens.extend(row)
-        else:
-            # Fallback: treat 'tokens' as flat list
-            flat_tokens = [str(x) for x in (tok or [])]
+        elif isinstance(tok, list) and tok and len(state.sentences) == 1:
+            # Flat token list with a single sentence
+            tokens_per_sentence = [[str(x) for x in tok]]
+
+        # If tokens_per_sentence missing or mismatched, fall back to simple whitespace split
+        if not tokens_per_sentence or len(tokens_per_sentence) != len(state.sentences):
+            tokens_per_sentence = [[str(x) for x in s.split()] for s in state.sentences]
+
+        flat_tokens: list[str] = [tok for row in tokens_per_sentence for tok in row]
         state.tokens_per_sentence = tokens_per_sentence
         state.tokens = flat_tokens
     except Exception as exc:

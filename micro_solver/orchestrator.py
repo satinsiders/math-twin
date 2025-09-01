@@ -45,8 +45,10 @@ class MicroRunner:
                     "problem_text": after.problem_text,
                     "sentences": after.sentences,
                     "tokens": after.tokens,
+                    "tokens_per_sentence": after.tokens_per_sentence,
                     "variables": after.variables,
                     "constants": after.constants,
+                    "quantities": after.quantities,
                     "relations": after.relations,
                     "goal": after.goal,
                     "problem_type": after.problem_type,
@@ -84,13 +86,11 @@ class MicroRunner:
         def _build_step_out(step_name: str, before: MicroState, after: MicroState) -> dict[str, Any]:  # noqa: ANN401 - generic
             try:
                 if step_name == "tokenize":
-                    out = {"sentences": after.sentences, "tokens": after.tokens}
-                    try:
-                        if getattr(after, "tokens_per_sentence", None):
-                            out["tokens_per_sentence"] = after.tokens_per_sentence
-                    except Exception:
-                        pass
-                    return out
+                    return {
+                        "sentences": after.sentences,
+                        "tokens": after.tokens,
+                        "tokens_per_sentence": getattr(after, "tokens_per_sentence", None),
+                    }
                 if step_name == "entities":
                     return {"variables": after.variables, "constants": after.constants, "quantities": after.quantities}
                 if step_name == "relations":

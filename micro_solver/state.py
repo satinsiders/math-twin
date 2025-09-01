@@ -48,6 +48,12 @@ class MicroState:
     equations: list[str] = field(default_factory=list)
     derived: dict[str, Any] = field(default_factory=dict)
 
+    # Meta‑reasoning stats
+    eq_count: int = 0
+    ineq_count: int = 0
+    degrees_of_freedom: int = 0
+    needs_replan: bool = False
+
     # Results
     intermediate: list[dict[str, Any]] = field(default_factory=list)  # trace of {op, in, out}
     candidate_answers: list[Any] = field(default_factory=list)
