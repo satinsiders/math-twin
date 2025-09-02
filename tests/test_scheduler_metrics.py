@@ -30,6 +30,26 @@ class MetricOp(Operator):
         return state.M.get("ineq_satisfied", 0.0)
 
 
+class ZeroDeltaOp(Operator):
+    name = "zero"
+
+    def applicable(self, state: MicroState) -> bool:
+        return True
+
+    def apply(self, state: MicroState):
+        return state, 0.0
+
+
+class PositiveDeltaOp(Operator):
+    name = "positive"
+
+    def applicable(self, state: MicroState) -> bool:
+        return True
+
+    def apply(self, state: MicroState):
+        return state, 1.0
+
+
 def test_update_metrics_tracks_progress() -> None:
     state = MicroState()
     state.C["symbolic"] = ["x = 3", "x >= 0", "x <= 10"]
@@ -62,3 +82,10 @@ def test_select_operator_uses_metric_scores() -> None:
     state.M["ineq_satisfied"] = 0.0
     chosen = select_operator(state, ops)
     assert isinstance(chosen, BaselineOp)
+
+
+def test_select_operator_breaks_ties_with_delta() -> None:
+    state = MicroState()
+    ops = [ZeroDeltaOp(), PositiveDeltaOp()]
+    chosen = select_operator(state, ops)
+    assert isinstance(chosen, PositiveDeltaOp)

@@ -65,6 +65,10 @@ class Operator:
     def apply(self, state: MicroState) -> Tuple[MicroState, float]:  # pragma: no cover - interface
         raise NotImplementedError
 
+    def score(self, state: MicroState) -> float:  # pragma: no cover - default
+        """Return a heuristic estimate of progress without mutating ``state``."""
+        return 0.0
+
 
 @dataclass
 class SimplifyOperator(Operator):
@@ -81,6 +85,11 @@ class SimplifyOperator(Operator):
         after = sum(len(r) for r in state.C["symbolic"])
         delta = float(before - after)
         return state, delta
+
+    def score(self, state: MicroState) -> float:
+        before = sum(len(r) for r in state.C["symbolic"])
+        after = sum(len(simplify_expr(r)) for r in state.C["symbolic"])
+        return float(before - after)
 
 
 @dataclass
@@ -99,6 +108,11 @@ class SubstituteOperator(Operator):
         delta = float(len(state.C["symbolic"]) - len(new_rel))
         state.C["symbolic"] = new_rel
         return state, delta
+
+    def score(self, state: MicroState) -> float:
+        step = {"action": "substitute", "args": {"replacements": self.replacements}}
+        new_rel = rewrite_relations(state.C["symbolic"], step)
+        return float(len(state.C["symbolic"]) - len(new_rel))
 
 
 @dataclass
@@ -137,6 +151,9 @@ class FeasibleSampleOperator(Operator):
         state.V["symbolic"]["derived"]["sample"] = sample
         return state, 0.0
 
+    def score(self, state: MicroState) -> float:
+        return float(len(state.V["symbolic"].get("variables", [])))
+
 
 @dataclass
 class SolveOperator(Operator):
@@ -174,6 +191,20 @@ class SolveOperator(Operator):
             return state, 1.0
         return state, 0.0
 
+    def score(self, state: MicroState) -> float:
+        target = next((v for v in state.V["symbolic"]["variables"] if v not in state.V["symbolic"]["env"]), None)
+        if target is None and state.V["symbolic"]["variables"]:
+            target = state.V["symbolic"]["variables"][0]
+        rels = _apply_env(state.C["symbolic"], state.V["symbolic"].get("env", {}))
+        sols: list[Any]
+        if target in state.V["symbolic"].get("env", {}):
+            sols = [str(state.V["symbolic"]["env"].get(target))]
+        else:
+            sols = solve_for(rels, target) if target else []
+            if not sols:
+                sols = solve_any(rels)
+        return 1.0 if sols else 0.0
+
 
 @dataclass
 class VerifyOperator(Operator):
@@ -205,6 +236,15 @@ class VerifyOperator(Operator):
             return state, 1.0
         return state, 0.0
 
+    def score(self, state: MicroState) -> float:
+        try:
+            candidate = str(state.A["symbolic"]["candidates"][-1])
+        except Exception:
+            return 0.0
+        var = next((v for v in state.V["symbolic"]["variables"] if v not in state.V["symbolic"]["env"]), None)
+        rels = _apply_env(state.C["symbolic"], state.V["symbolic"]["env"])
+        return 1.0 if verify_candidate(rels, candidate, varname=var) else 0.0
+
 
 @dataclass
 class EliminateOperator(Operator):
@@ -232,6 +272,16 @@ class EliminateOperator(Operator):
             state.V["symbolic"]["variables"] = [v for v in state.V["symbolic"]["variables"] if v != target]
         return state, delta
 
+    def score(self, state: MicroState) -> float:
+        target = state.V["symbolic"]["variables"][-1]
+        before = sum(r.count(target) for r in state.C["symbolic"])
+        new_rel = rewrite_relations(
+            state.C["symbolic"],
+            {"action": "eliminate_symbol", "args": {"symbol": target}},
+        )
+        after = sum(r.count(target) for r in new_rel)
+        return float(before - after)
+
 
 @dataclass
 class TransformOperator(Operator):
@@ -252,6 +302,12 @@ class TransformOperator(Operator):
         after = sum(len(r) for r in new_rel)
         state.C["symbolic"] = new_rel
         return state, float(before - after)
+
+    def score(self, state: MicroState) -> float:
+        before = sum(len(r) for r in state.C["symbolic"])
+        new_rel = rewrite_relations(state.C["symbolic"], {"action": self.action})
+        after = sum(len(r) for r in new_rel)
+        return float(before - after)
 
 
 @dataclass
@@ -292,6 +348,22 @@ class DiffOperator(Operator):
         except Exception:
             return state, 0.0
 
+    def score(self, state: MicroState) -> float:
+        deriv = state.derived
+        expr = deriv.get("expression") if isinstance(deriv, dict) else None
+        if expr is None:
+            return 0.0
+        try:
+            import sympy as sp
+
+            var = deriv.get("variable", "x") if isinstance(deriv, dict) else "x"
+            sym = sp.Symbol(str(var))
+            expr_sym = sp.sympify(str(expr))
+            res = sp.diff(expr_sym, sym)
+            return float(len(str(expr)) - len(sp.sstr(res)))
+        except Exception:
+            return 0.0
+
 
 @dataclass
 class IntegrateOperator(Operator):
@@ -330,6 +402,22 @@ class IntegrateOperator(Operator):
             return state, delta
         except Exception:
             return state, 0.0
+
+    def score(self, state: MicroState) -> float:
+        deriv = state.derived
+        expr = deriv.get("expression") if isinstance(deriv, dict) else None
+        if expr is None:
+            return 0.0
+        try:
+            import sympy as sp
+
+            var = deriv.get("variable", "x") if isinstance(deriv, dict) else "x"
+            sym = sp.Symbol(str(var))
+            expr_sym = sp.sympify(str(expr))
+            res = sp.integrate(expr_sym, sym)
+            return float(len(str(expr)) - len(sp.sstr(res)))
+        except Exception:
+            return 0.0
 
 
 @dataclass
@@ -371,6 +459,29 @@ class CaseSplitOperator(Operator):
         except Exception:
             pass
         return state, 0.0
+
+    def score(self, state: MicroState) -> float:
+        try:
+            import sympy as sp
+            from sympy.parsing.sympy_parser import (
+                implicit_multiplication_application,
+                parse_expr,
+                standard_transformations,
+            )
+            trans = (*standard_transformations, implicit_multiplication_application)
+            for r in state.C["symbolic"]:
+                op, lhs, rhs = parse_relation_sides(r)
+                if op != "=":
+                    continue
+                L = parse_expr(lhs, transformations=trans)
+                R = parse_expr(rhs, transformations=trans)
+                if L.is_Pow and L.exp == 2 and len(L.free_symbols) == 1 and R.is_number:
+                    sym = list(L.free_symbols)[0]
+                    root = sp.sqrt(R)
+                    return float(2)
+        except Exception:
+            pass
+        return 0.0
 
 
 @dataclass
@@ -416,6 +527,35 @@ class BoundInferOperator(Operator):
         except Exception:
             return state, 0.0
 
+    def score(self, state: MicroState) -> float:
+        try:
+            import sympy as sp
+            bounds = dict(state.domain)
+            changes = 0
+            for r in state.C["symbolic"]:
+                op, lhs, rhs = parse_relation_sides(r)
+                if op not in ("<", "<=", ">", ">="):
+                    continue
+                try:
+                    sym = sp.Symbol(lhs.strip())
+                    val = float(sp.sympify(rhs))
+                except Exception:
+                    continue
+                key = str(sym)
+                low, high = bounds.get(key, (None, None))
+                if op in (">", ">="):
+                    if low is None or val > low:
+                        low = val
+                        changes += 1
+                else:
+                    if high is None or val < high:
+                        high = val
+                        changes += 1
+                bounds[key] = (low, high)
+            return float(changes)
+        except Exception:
+            return 0.0
+
 
 @dataclass
 class DomainPruneOperator(Operator):
@@ -459,6 +599,29 @@ class DomainPruneOperator(Operator):
             state.V["symbolic"]["derived"]["sample"] = sample
         return state, float(removed)
 
+    def score(self, state: MicroState) -> float:
+        sample = dict(state.V["symbolic"].get("derived", {}).get("sample", {}))
+        removed = 0
+        for k, v in list(sample.items()):
+            low, high = state.domain.get(k, (None, None))
+            tags = state.qual.get(k, set())
+            if (low is not None and v < low) or (high is not None and v > high):
+                removed += 1
+                continue
+            if "positive" in tags and v <= 0:
+                removed += 1
+                continue
+            if "nonnegative" in tags and v < 0:
+                removed += 1
+                continue
+            if "negative" in tags and v >= 0:
+                removed += 1
+                continue
+            if "nonpositive" in tags and v > 0:
+                removed += 1
+                continue
+        return float(removed)
+
 
 @dataclass
 class NumericSolveOperator(Operator):
@@ -483,6 +646,18 @@ class NumericSolveOperator(Operator):
                 state.A["symbolic"]["candidates"].append(str(val))
                 return state, 1.0
         return state, 0.0
+
+    def score(self, state: MicroState) -> float:
+        for r in state.C["symbolic"]:
+            op, lhs, rhs = parse_relation_sides(r)
+            if op != "=":
+                continue
+            ok, val = evaluate_with_env(rhs, state.V["symbolic"].get("env", {}))
+            if not ok:
+                ok, val = evaluate_numeric(rhs)
+            if ok:
+                return 1.0
+        return 0.0
 
 
 @dataclass
@@ -512,6 +687,18 @@ class GridRefineOperator(Operator):
             state.V["symbolic"]["derived"]["sample"] = sample
         return state, float(changes)
 
+    def score(self, state: MicroState) -> float:
+        sample = dict(state.V["symbolic"].get("derived", {}).get("sample", {}))
+        changes = 0
+        for v in sample.values():
+            try:
+                rv = round(float(v), 3)
+                if rv != v:
+                    changes += 1
+            except Exception:
+                continue
+        return float(changes)
+
 
 @dataclass
 class QuadratureOperator(Operator):
@@ -537,6 +724,19 @@ class QuadratureOperator(Operator):
             return state, 1.0
         except Exception:
             return state, 0.0
+
+    def score(self, state: MicroState) -> float:
+        try:
+            import sympy as sp
+            x = sp.Symbol("x")
+            f_expr = sp.sympify(str(state.V["symbolic"].get("derived", {}).get("integrand")))
+            a, b = state.V["symbolic"].get("derived", {}).get("interval", (None, None))
+            if a is None or b is None:
+                return 0.0
+            sp.integrate(f_expr, (x, a, b))
+            return 1.0
+        except Exception:
+            return 0.0
 
 
 @dataclass
@@ -568,6 +768,21 @@ class RationalizeOperator(Operator):
             return state, float(changes)
         except Exception:
             return state, 0.0
+
+    def score(self, state: MicroState) -> float:
+        try:
+            import sympy as sp
+            changes = 0
+            for a in state.A["symbolic"]["candidates"]:
+                try:
+                    r = sp.Rational(str(a)).limit_denominator()
+                    if str(r) != str(a):
+                        changes += 1
+                except Exception:
+                    continue
+            return float(changes)
+        except Exception:
+            return 0.0
 
 
 # Default operator pool used by the high-level scheduler entrypoint.
