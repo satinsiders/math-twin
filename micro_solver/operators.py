@@ -11,7 +11,13 @@ from dataclasses import dataclass
 from typing import Tuple
 
 from .state import MicroState
-from .sym_utils import rewrite_relations, simplify_expr, verify_candidate
+from .sym_utils import (
+    rewrite_relations,
+    simplify_expr,
+    verify_candidate,
+    solve_for,
+    solve_any,
+)
 
 
 class Operator:
@@ -79,13 +85,41 @@ class FeasibleSampleOperator(Operator):
 
 
 @dataclass
+class SolveOperator(Operator):
+    """Solve relations for a target symbol when system is determined."""
+
+    name: str = "solve"
+
+    def applicable(self, state: MicroState) -> bool:  # pragma: no cover - trivial
+        return (
+            state.degrees_of_freedom == 0
+            and bool(state.relations)
+            and not state.candidate_answers
+        )
+
+    def apply(self, state: MicroState) -> Tuple[MicroState, float]:
+        target = state.variables[0] if state.variables else None
+        sols = solve_for(state.relations, target)
+        if not sols:
+            sols = solve_any(state.relations)
+        if sols:
+            state.candidate_answers.extend(sols)
+            return state, 1.0
+        return state, 0.0
+
+
+@dataclass
 class VerifyOperator(Operator):
     """Verify the latest candidate against original relations."""
 
     name: str = "verify"
 
     def applicable(self, state: MicroState) -> bool:  # pragma: no cover - trivial
-        return bool(state.candidate_answers) and state.final_answer is None
+        return (
+            state.degrees_of_freedom == 0
+            and bool(state.candidate_answers)
+            and state.final_answer is None
+        )
 
     def apply(self, state: MicroState) -> Tuple[MicroState, float]:
         try:
