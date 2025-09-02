@@ -14,8 +14,8 @@ logger = logging.getLogger("micro_solver.steps")
 def local_qa(state: MicroState, prev_relations: list[str], prev_idx: int) -> tuple[bool, str]:
     """Basic QA check to ensure rewrite changed state."""
     try:
-        changed = (state.relations != prev_relations) or (state.current_step_idx != prev_idx)
-        if not state.relations:
+        changed = (state.C["symbolic"] != prev_relations) or (state.current_step_idx != prev_idx)
+        if not state.C["symbolic"]:
             return False, "empty-relations-after-rewrite"
         if not changed:
             return False, "no-change-after-rewrite"
@@ -28,12 +28,12 @@ def maybe_eval_target(state: MicroState) -> bool:
     """Evaluate the target expression and record candidate answers."""
     try:
         target_expr = None
-        if isinstance(state.canonical_repr, dict):
-            target_expr = state.canonical_repr.get("target")
+        if isinstance(state.R["symbolic"]["canonical_repr"], dict):
+            target_expr = state.R["symbolic"]["canonical_repr"].get("target")
         if isinstance(target_expr, str) and target_expr.strip():
-            ok, val = evaluate_with_env(target_expr, state.env or {})
+            ok, val = evaluate_with_env(target_expr, state.V["symbolic"]["env"] or {})
             if ok:
-                state.candidate_answers.append(val)
+                state.A["symbolic"]["candidates"].append(val)
                 return True
     except Exception:
         pass
@@ -43,17 +43,17 @@ def maybe_eval_target(state: MicroState) -> bool:
 def promote_env_from_relations(state: MicroState) -> None:
     """Populate environment variables from existing relations."""
     try:
-        for r in state.relations or []:
+        for r in state.C["symbolic"] or []:
             op, lhs, rhs = parse_relation_sides(r)
             if op != "=":
                 continue
             name = (lhs or "").strip()
             if not re.match(r"^[A-Za-z][A-Za-z0-9_]*$", name):
                 continue
-            ok, val = evaluate_with_env(rhs, state.env or {})
+            ok, val = evaluate_with_env(rhs, state.V["symbolic"]["env"] or {})
             if ok:
                 try:
-                    state.env[name] = val
+                    state.V["symbolic"]["env"][name] = val
                 except Exception:
                     pass
     except Exception:
@@ -74,8 +74,10 @@ def stable_unique(items: list[str]) -> list[str]:
 def state_digest(state: MicroState) -> str:
     """Compute a digest of the state's relations and environment."""
     try:
-        rel_key = "|".join(sorted(map(str, state.relations or [])))
-        env_items = ",".join(f"{k}={state.env.get(k)}" for k in sorted(state.env.keys()))
+        rel_key = "|".join(sorted(map(str, state.C["symbolic"] or [])))
+        env_items = ",".join(
+            f"{k}={state.V['symbolic']['env'].get(k)}" for k in sorted(state.V['symbolic']['env'].keys())
+        )
         h = hashlib.md5()
         h.update(rel_key.encode("utf-8", errors="ignore"))
         h.update(env_items.encode("utf-8", errors="ignore"))
@@ -94,7 +96,7 @@ def target_symbols(state: MicroState) -> set[str]:
             standard_transformations,
         )
         transformations = (*standard_transformations, implicit_multiplication_application)
-        tgt = (state.canonical_repr or {}).get("target") if isinstance(state.canonical_repr, dict) else None
+        tgt = (state.R["symbolic"]["canonical_repr"] or {}).get("target") if isinstance(state.R["symbolic"]["canonical_repr"], dict) else None
         if isinstance(tgt, str) and tgt.strip():
             expr = parse_expr(tgt, transformations=transformations)
             return {str(s) for s in getattr(expr, "free_symbols", set())}
@@ -155,25 +157,25 @@ def progress_metrics(state: MicroState) -> tuple[float, int, int, int, int, int,
         sp = None  # type: ignore
         transformations = None  # type: ignore
     try:
-        score += 2.0 * float(len(state.env or {}))
+        score += 2.0 * float(len(state.V["symbolic"]["env"] or {}))
     except Exception:
         pass
     num_evaluable = 0
     free_syms: set[str] = set()
     eq_count = 0
     all_syms: set[str] = set()
-    for r in state.relations or []:
+    for r in state.C["symbolic"] or []:
         try:
             op, lhs, rhs = parse_relation_sides(r)
             if op == "":
-                ok, _ = evaluate_with_env(lhs, state.env or {})
+                ok, _ = evaluate_with_env(lhs, state.V["symbolic"]["env"] or {})
                 if not ok:
                     ok, _ = evaluate_numeric(lhs)
                 if ok:
                     num_evaluable += 1
             else:
-                okL, _L = evaluate_with_env(lhs, state.env or {})
-                okR, _R = evaluate_with_env(rhs, state.env or {})
+                okL, _L = evaluate_with_env(lhs, state.V["symbolic"]["env"] or {})
+                okR, _R = evaluate_with_env(rhs, state.V["symbolic"]["env"] or {})
                 if not okL:
                     okL, _L = evaluate_numeric(lhs)
                 if not okR:
@@ -203,14 +205,14 @@ def progress_metrics(state: MicroState) -> tuple[float, int, int, int, int, int,
     bound = 0
     try:
         for t in tgt_syms:
-            if t in (state.env or {}):
+            if t in (state.V["symbolic"]["env"] or {}):
                 bound += 1
     except Exception:
         pass
     try:
-        target_expr = (state.canonical_repr or {}).get("target") if isinstance(state.canonical_repr, dict) else None
+        target_expr = (state.R["symbolic"]["canonical_repr"] or {}).get("target") if isinstance(state.R["symbolic"]["canonical_repr"], dict) else None
         if isinstance(target_expr, str) and target_expr.strip():
-            ok, _ = evaluate_with_env(target_expr, state.env or {})
+            ok, _ = evaluate_with_env(target_expr, state.V["symbolic"]["env"] or {})
             if ok:
                 score += 5.0
     except Exception:
@@ -219,10 +221,10 @@ def progress_metrics(state: MicroState) -> tuple[float, int, int, int, int, int,
     num_solvable = 0
     try:
         if tgt_syms:
-            num_solvable += numeric_solvable_count(state.relations, tgt_syms)
+            num_solvable += numeric_solvable_count(state.C["symbolic"], tgt_syms)
         others = set(all_syms) - set(tgt_syms)
         if others:
-            num_solvable += max(0, numeric_solvable_count(state.relations, others))
+            num_solvable += max(0, numeric_solvable_count(state.C["symbolic"], others))
     except Exception:
         pass
     score += 3.0 * float(bound)

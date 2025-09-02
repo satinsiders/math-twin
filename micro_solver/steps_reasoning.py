@@ -8,7 +8,7 @@ from .steps_util import _invoke
 def _micro_schema(state: MicroState) -> MicroState:
     payload = {
         "type": state.problem_type,
-        "relations": state.relations,
+        "relations": state.C["symbolic"],
         "target": state.goal,
     }
     out, err = _invoke(A.SchemaRetrieverAgent, payload, qa_feedback=state.qa_feedback)
@@ -23,7 +23,7 @@ def _micro_schema(state: MicroState) -> MicroState:
 def _micro_strategies(state: MicroState) -> MicroState:
     out, err = _invoke(
         A.StrategyEnumeratorAgent,
-        {"schemas": state.schemas, "relations": state.relations, "target": state.goal},
+        {"schemas": state.schemas, "relations": state.C["symbolic"], "target": state.goal},
         qa_feedback=state.qa_feedback,
     )
     state.qa_feedback = None
@@ -38,7 +38,7 @@ def _micro_choose_strategy(state: MicroState) -> MicroState:
     for s in state.strategies or []:
         out, err = _invoke(
             A.PreconditionCheckerAgent,
-            {"strategy": s, "relations": state.relations},
+            {"strategy": s, "relations": state.C["symbolic"]},
             qa_feedback=state.qa_feedback,
         )
         if err:

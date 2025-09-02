@@ -23,7 +23,7 @@ def _micro_execute_plan(state: MicroState, *, max_iters: Optional[int] = None) -
     n = len(state.plan_steps or [])
     no_progress = 0
     last_idx = state.current_step_idx
-    last_relations = list(state.relations)
+    last_relations = list(state.C["symbolic"])
     if n > 0:
         logger.info("[micro-solver] execute_plan: plan_steps completed (%d iterations)", iters)
     else:
@@ -34,18 +34,18 @@ def _micro_execute_plan(state: MicroState, *, max_iters: Optional[int] = None) -
     budget = max_iters if max_iters is not None else 50
     atomic_history: list[dict[str, Any]] = []
     attempted: set[str] = set()
-    last_env = dict(state.env)
+    last_env = dict(state.V["symbolic"]["env"])
     while tries < budget:
         if maybe_eval_target(state):
             # Update progress in derived and log
             try:
                 ps, eqc, nev, frees = progress_metrics(state)
-                state.derived["progress_score"] = ps
-                state.derived["progress_delta"] = None
-                state.derived["atomic_iters"] = tries
-                state.derived["eq_count"] = eqc
-                state.derived["num_evaluable"] = nev
-                state.derived["free_symbols"] = frees
+                state.V["symbolic"]["derived"]["progress_score"] = ps
+                state.V["symbolic"]["derived"]["progress_delta"] = None
+                state.V["symbolic"]["derived"]["atomic_iters"] = tries
+                state.V["symbolic"]["derived"]["eq_count"] = eqc
+                state.V["symbolic"]["derived"]["num_evaluable"] = nev
+                state.V["symbolic"]["derived"]["free_symbols"] = frees
             except Exception:
                 pass
             return state
@@ -55,10 +55,10 @@ def _micro_execute_plan(state: MicroState, *, max_iters: Optional[int] = None) -
         ap_out, ap_err = _invoke(
             A.AtomicPlannerAgent,
             {
-                "relations": state.relations,
+                "relations": state.C["symbolic"],
                 "goal": state.goal,
-                "canonical_target": (state.canonical_repr or {}).get("target") if isinstance(state.canonical_repr, dict) else None,
-                "env": state.env,
+                "canonical_target": (state.R["symbolic"]["canonical_repr"] or {}).get("target") if isinstance(state.R["symbolic"]["canonical_repr"], dict) else None,
+                "env": state.V["symbolic"]["env"],
                 "history": hist,
             },
             qa_feedback=state.qa_feedback,
@@ -92,15 +92,15 @@ def _micro_execute_plan(state: MicroState, *, max_iters: Optional[int] = None) -
             key = f"{act_c}|{str(args_c)}|{state_digest(state)}"
             if key in attempted:
                 continue
-            sim_rels = rewrite_relations(state.relations, cand)
+            sim_rels = rewrite_relations(state.C["symbolic"], cand)
             # Compute score for simulated relations
-            if sim_rels and sim_rels != state.relations:
-                saved = state.relations
+            if sim_rels and sim_rels != state.C["symbolic"]:
+                saved = state.C["symbolic"]
                 try:
-                    state.relations = sim_rels
+                    state.C["symbolic"] = sim_rels
                     sim_score, _, _, _, _, _, _ = progress_metrics(state)
                 finally:
-                    state.relations = saved
+                    state.C["symbolic"] = saved
             else:
                 sim_score = base_score
             if sim_score > best_score:
@@ -128,11 +128,11 @@ def _micro_execute_plan(state: MicroState, *, max_iters: Optional[int] = None) -
         attempted.add(f"{act}|{str(args)}|{state_digest(state)}")
         logger.info("[micro-solver] iterate atomic %d: action %s", tries + 1, str(step2.get("action")))
 
-        prev_rel = list(state.relations)
-        prev_env = dict(state.env)
+        prev_rel = list(state.C["symbolic"])
+        prev_env = dict(state.V["symbolic"]["env"])
         prev_score = base_score
 
-        new_rels2 = rewrite_relations(state.relations, step2)
+        new_rels2 = rewrite_relations(state.C["symbolic"], step2)
         # Guard: disallow unjustified assigns; require numeric RHS and structural justification
         assign_invalid = False
         if "assign" in act:
@@ -142,14 +142,14 @@ def _micro_execute_plan(state: MicroState, *, max_iters: Optional[int] = None) -
                 ok_rhs = False
                 num_val = None
                 if isinstance(rhs_val, str):
-                    ok_rhs, num_val = evaluate_with_env(rhs_val, state.env or {})
+                    ok_rhs, num_val = evaluate_with_env(rhs_val, state.V["symbolic"]["env"] or {})
                     if not ok_rhs:
                         ok_rhs, num_val = evaluate_numeric(rhs_val)
                 # Structural justification: target must appear as a side of some equality, or be uniquely solvable from relations
                 justified = False
                 if tgt_sym:
                     # Check for explicit side equality 'tgt = expr' or 'expr = tgt'
-                    for r in state.relations or []:
+                    for r in state.C["symbolic"] or []:
                         try:
                             opx, lhsx, rhsx = parse_relation_sides(r)
                         except Exception:
@@ -169,7 +169,7 @@ def _micro_execute_plan(state: MicroState, *, max_iters: Optional[int] = None) -
                             transformations = (*standard_transformations, implicit_multiplication_application)
                             sym = sp.Symbol(tgt_sym)
                             eqs: list[sp.Eq] = []
-                            for r in state.relations:
+                            for r in state.C["symbolic"]:
                                 try:
                                     op0, l0, r0 = parse_relation_sides(r)
                                     if op0 != "=":
@@ -198,14 +198,14 @@ def _micro_execute_plan(state: MicroState, *, max_iters: Optional[int] = None) -
                             pass
                 if not (ok_rhs and justified):
                     assign_invalid = True
-                    new_rels2 = list(state.relations)
+                    new_rels2 = list(state.C["symbolic"])
             except Exception:
                 assign_invalid = True
-                new_rels2 = list(state.relations)
+                new_rels2 = list(state.C["symbolic"])
 
         # Deterministic env-based substitute across all relations
         blocked_llm_for_subst = False
-        if (not new_rels2 or new_rels2 == state.relations) and ("substitute_env" in act or "substitute" in act or "subs" in act or "replace" in act):
+        if (not new_rels2 or new_rels2 == state.C["symbolic"]) and ("substitute_env" in act or "substitute" in act or "subs" in act or "replace" in act):
             try:
                 import sympy as sp
                 from sympy.parsing.sympy_parser import (
@@ -215,7 +215,7 @@ def _micro_execute_plan(state: MicroState, *, max_iters: Optional[int] = None) -
                 )
                 transformations = (*standard_transformations, implicit_multiplication_application)
                 subs_map: dict[Any, Any] = {}
-                for k, v in (state.env or {}).items():
+                for k, v in (state.V["symbolic"]["env"] or {}).items():
                     try:
                         if isinstance(v, (int, float)):
                             subs_map[sp.Symbol(str(k))] = v
@@ -231,7 +231,7 @@ def _micro_execute_plan(state: MicroState, *, max_iters: Optional[int] = None) -
                             continue
                 if subs_map:
                     temp: list[str] = []
-                    for r in state.relations:
+                    for r in state.C["symbolic"]:
                         try:
                             op_idx = r.find("=")
                             if op_idx >= 0:
@@ -253,7 +253,7 @@ def _micro_execute_plan(state: MicroState, *, max_iters: Optional[int] = None) -
                 pass
 
         # Deterministic bind_numeric using env if provided
-        if (not new_rels2 or new_rels2 == state.relations) and ("bind_numeric" in act):
+        if (not new_rels2 or new_rels2 == state.C["symbolic"]) and ("bind_numeric" in act):
             try:
                 import sympy as sp
                 from sympy.parsing.sympy_parser import (
@@ -268,7 +268,7 @@ def _micro_execute_plan(state: MicroState, *, max_iters: Optional[int] = None) -
                     e = parse_expr(expr, transformations=transformations)
                     # substitute env first
                     subs_map: dict[Any, Any] = {}
-                    for k, v in (state.env or {}).items():
+                    for k, v in (state.V["symbolic"]["env"] or {}).items():
                         if isinstance(v, (int, float)):
                             subs_map[sp.Symbol(str(k))] = v
                     if subs_map:
@@ -277,24 +277,24 @@ def _micro_execute_plan(state: MicroState, *, max_iters: Optional[int] = None) -
                     if not getattr(e_simpl, "free_symbols", set()):
                         valf = float(e_simpl)
                         val_out = int(round(valf)) if abs(valf - round(valf)) < 1e-9 else valf
-                        new_rels2 = list(state.relations) + [f"{tgt} = {val_out}"]
+                        new_rels2 = list(state.C["symbolic"]) + [f"{tgt} = {val_out}"]
                         try:
-                            state.env[tgt] = val_out
+                            state.V["symbolic"]["env"][tgt] = val_out
                         except Exception:
                             pass
             except Exception:
                 pass
 
-        if not new_rels2 or new_rels2 == state.relations:
+        if not new_rels2 or new_rels2 == state.C["symbolic"]:
             # Avoid LLM fallback for substitute when we had nothing to substitute
             if not (("substitute" in act or "substitute_env" in act) and blocked_llm_for_subst):
-                r_out, r_err = _invoke(A.RewriteAgent, {"relations": state.relations, "step": step2})
+                r_out, r_err = _invoke(A.RewriteAgent, {"relations": state.C["symbolic"], "step": step2})
                 if not r_err and isinstance(r_out, dict):
                     try:
                         llm_rels = [str(x) for x in (r_out.get("new_relations") or [])]
                         # Safety: if LLM returns fewer relations than original for a preserving action, merge instead of replace
-                        if ("substitute" in act or "substitute_env" in act or "simplify" in act or "normalize" in act) and len(llm_rels) < len(state.relations):
-                            new_rels2 = list(state.relations) + llm_rels
+                        if ("substitute" in act or "substitute_env" in act or "simplify" in act or "normalize" in act) and len(llm_rels) < len(state.C["symbolic"]):
+                            new_rels2 = list(state.C["symbolic"]) + llm_rels
                             from_se = True
                         else:
                             new_rels2 = llm_rels
@@ -302,10 +302,10 @@ def _micro_execute_plan(state: MicroState, *, max_iters: Optional[int] = None) -
                         new_rels2 = []
 
         from_se = False
-        if not new_rels2 or new_rels2 == state.relations:
+        if not new_rels2 or new_rels2 == state.C["symbolic"]:
             se_out, se_err = _invoke(
                 A.StepExecutorAgent,
-                {"relations": state.relations, "step": step2},
+                {"relations": state.C["symbolic"], "step": step2},
                 qa_feedback=state.qa_feedback,
             )
             state.qa_feedback = None
@@ -314,14 +314,14 @@ def _micro_execute_plan(state: MicroState, *, max_iters: Optional[int] = None) -
                     env_delta = se_out.get("env_delta") if isinstance(se_out.get("env_delta"), dict) else {}
                     if env_delta:
                         try:
-                            state.env.update(env_delta)
+                            state.V["symbolic"]["env"].update(env_delta)
                         except Exception:
                             pass
                     delta = None
                     if isinstance(se_out.get("new_relations_delta"), list):
                         delta = [str(x) for x in (se_out.get("new_relations_delta") or [])]
                     if delta:
-                        new_rels2 = list(state.relations) + delta
+                        new_rels2 = list(state.C["symbolic"]) + delta
                     else:
                         new_rels2 = [str(x) for x in (se_out.get("new_relations") or [])]
                     from_se = True
@@ -330,9 +330,9 @@ def _micro_execute_plan(state: MicroState, *, max_iters: Optional[int] = None) -
 
         if new_rels2:
             if from_se:
-                state.relations = stable_unique(list(state.relations) + list(new_rels2))
+                state.C["symbolic"] = stable_unique(list(state.C["symbolic"]) + list(new_rels2))
             else:
-                state.relations = stable_unique(new_rels2)
+                state.C["symbolic"] = stable_unique(new_rels2)
             promote_env_from_relations(state)
 
         try:
@@ -342,25 +342,25 @@ def _micro_execute_plan(state: MicroState, *, max_iters: Optional[int] = None) -
             logger.info(
                 "[micro-solver] iterate atomic %d: out relations=%d env_keys=%d score=%.2f Δ=%.2f",
                 tries + 1,
-                len(state.relations or []),
-                len(state.env or {}),
+                len(state.C["symbolic"] or []),
+                len(state.V["symbolic"]["env"] or {}),
                 new_score,
                 delta,
             )
-            state.derived["progress_score"] = new_score
-            state.derived["progress_delta"] = delta
-            state.derived["eq_count"] = new_eqc
-            state.derived["num_evaluable"] = new_nev
-            state.derived["free_symbols"] = new_free
-            state.derived["target_bound"] = new_bound
-            state.derived["target_unbound"] = new_unbound
-            state.derived["numeric_solvable"] = new_solv
+            state.V["symbolic"]["derived"]["progress_score"] = new_score
+            state.V["symbolic"]["derived"]["progress_delta"] = delta
+            state.V["symbolic"]["derived"]["eq_count"] = new_eqc
+            state.V["symbolic"]["derived"]["num_evaluable"] = new_nev
+            state.V["symbolic"]["derived"]["free_symbols"] = new_free
+            state.V["symbolic"]["derived"]["target_bound"] = new_bound
+            state.V["symbolic"]["derived"]["target_unbound"] = new_unbound
+            state.V["symbolic"]["derived"]["numeric_solvable"] = new_solv
         except Exception:
             pass
 
         # Local QA
-        changed = (state.relations != prev_rel) or (state.env != prev_env)
-        if not state.relations:
+        changed = (state.C["symbolic"] != prev_rel) or (state.V["symbolic"]["env"] != prev_env)
+        if not state.C["symbolic"]:
             ok2, reason2 = False, "empty-relations-after-atomic"
         elif not changed:
             ok2, reason2 = False, "no-change-after-atomic"
@@ -371,9 +371,9 @@ def _micro_execute_plan(state: MicroState, *, max_iters: Optional[int] = None) -
             improved_solvable = (new_solv > base_solv)
             if "assign" in act and assign_invalid:
                 ok2, reason2 = False, "assign-invalid"
-            elif "assign" in act and (state.env == prev_env):
+            elif "assign" in act and (state.V["symbolic"]["env"] == prev_env):
                 ok2, reason2 = False, "assign-without-env-change"
-            elif state.derived.get("progress_delta", 0) <= 0 and not maybe_eval_target(state) and not (improved_structure or improved_target or improved_solvable):
+            elif state.V["symbolic"]["derived"].get("progress_delta", 0) <= 0 and not maybe_eval_target(state) and not (improved_structure or improved_target or improved_solvable):
                 ok2, reason2 = False, "no-progress-score"
             else:
                 ok2, reason2 = True, "pass"
@@ -396,11 +396,11 @@ def _micro_execute_plan(state: MicroState, *, max_iters: Optional[int] = None) -
             atomic_history.append({"action": act, "ok": True, "reason": "pass"})
         except Exception:
             pass
-        progressed = (state.relations != last_relations) or (state.env != last_env)
+        progressed = (state.C["symbolic"] != last_relations) or (state.V["symbolic"]["env"] != last_env)
         if progressed:
             no_progress = 0
-            last_relations = list(state.relations)
-            last_env = dict(state.env)
+            last_relations = list(state.C["symbolic"])
+            last_env = dict(state.V["symbolic"]["env"])
         else:
             no_progress += 1
             if no_progress >= 3:
@@ -414,7 +414,7 @@ def _micro_execute_plan(state: MicroState, *, max_iters: Optional[int] = None) -
                     )
                     transformations = (*standard_transformations, implicit_multiplication_application)
                     bound_any = False
-                    for r in list(state.relations):
+                    for r in list(state.C["symbolic"]):
                         try:
                             op, lhs, rhs = parse_relation_sides(r)
                             if op != "=":
@@ -429,10 +429,10 @@ def _micro_execute_plan(state: MicroState, *, max_iters: Optional[int] = None) -
                                     val = sol[0].get(sym)
                                     if val is not None and not getattr(val, "free_symbols", set()):
                                         name = str(sym)
-                                        state.relations = stable_unique(list(state.relations) + [f"{name} = {sp.sstr(val)}"]) 
+                                        state.C["symbolic"] = stable_unique(list(state.C["symbolic"]) + [f"{name} = {sp.sstr(val)}"]) 
                                         try:
                                             vfloat = float(val)
-                                            state.env[name] = int(round(vfloat)) if abs(vfloat - round(vfloat)) < 1e-9 else vfloat
+                                            state.V["symbolic"]["env"][name] = int(round(vfloat)) if abs(vfloat - round(vfloat)) < 1e-9 else vfloat
                                         except Exception:
                                             pass
                                         bound_any = True
@@ -448,11 +448,11 @@ def _micro_execute_plan(state: MicroState, *, max_iters: Optional[int] = None) -
     # Final progress record
     try:
         ps, eqc, nev, frees = progress_metrics(state)
-        state.derived["progress_score"] = ps
-        state.derived["atomic_iters"] = tries
-        state.derived["eq_count"] = eqc
-        state.derived["num_evaluable"] = nev
-        state.derived["free_symbols"] = frees
+        state.V["symbolic"]["derived"]["progress_score"] = ps
+        state.V["symbolic"]["derived"]["atomic_iters"] = tries
+        state.V["symbolic"]["derived"]["eq_count"] = eqc
+        state.V["symbolic"]["derived"]["num_evaluable"] = nev
+        state.V["symbolic"]["derived"]["free_symbols"] = frees
     except Exception:
         pass
     return state
