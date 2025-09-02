@@ -28,3 +28,13 @@ def test_solve_operator_respects_env_bindings() -> None:
     result = solve(state, [SolveOperator(), VerifyOperator()], max_iters=4)
     assert result.candidate_answers == ["2"]
     assert result.final_answer == "2"
+
+
+def test_solve_operator_surfaces_bound_values() -> None:
+    state = MicroState()
+    state.variables = ["x"]
+    state.env = {"x": 2}
+    state.relations = ["x = 2"]
+    result = solve(state, [SolveOperator(), VerifyOperator()], max_iters=4)
+    assert result.candidate_answers == ["2"]
+    assert result.final_answer == "2"
