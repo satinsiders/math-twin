@@ -84,7 +84,7 @@ def update_metrics(state: MicroState) -> MicroState:
     """Refresh solver metrics like degrees of freedom and progress score."""
 
     state = _micro_monitor_dof(state)
-    metrics = dict(getattr(state, "M", {}))
+    metrics = dict(state.M)
 
     prev_res = metrics.get("residual_l2")
     res = _total_residual_l2(state)

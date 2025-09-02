@@ -23,7 +23,8 @@ def test_skip_repeated_atomic(monkeypatch):
 
     monkeypatch.setattr("micro_solver.steps_execution._invoke", fake_invoke)
 
-    state = MicroState(goal="test", relations=["x = x"], env={})
+    state = MicroState(goal="test", env={})
+    state.relations = ["x = x"]
     _micro_execute_plan(state, max_iters=10)
 
     assert calls["executor"] == 1

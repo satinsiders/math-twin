@@ -31,12 +31,11 @@ class MetricOp(Operator):
 
 
 def test_update_metrics_tracks_progress() -> None:
-    state = MicroState(
-        relations=["x = 3", "x >= 0", "x <= 10"],
-        variables=["x"],
-        env={"x": 5},
-        derived={"bounds": {"x": (0.0, 10.0)}},
-    )
+    state = MicroState()
+    state.relations = ["x = 3", "x >= 0", "x <= 10"]
+    state.variables = ["x"]
+    state.env = {"x": 5}
+    state.derived = {"bounds": {"x": (0.0, 10.0)}}
     state = update_metrics(state)
     assert state.M["residual_l2"] == pytest.approx(2.0)
     assert state.M["residual_l2_change"] == pytest.approx(0.0)

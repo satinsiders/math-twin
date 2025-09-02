@@ -106,16 +106,7 @@ class MicroState:
     domain: dict[str, tuple[float | None, float | None]] = field(default_factory=dict)
     qual: dict[str, set[str]] = field(default_factory=dict)
 
-    # Meta‑reasoning stats
-    eq_count: int = 0
-    ineq_count: int = 0
-    jacobian_rank: int = 0
-    degrees_of_freedom: int = 0
-    needs_replan: bool = False
-    progress_score: float = 0.0
-    stalls: int = 0
-    violations: int = 0
-    M: dict[str, float] = field(default_factory=dict)
+    # Meta‑reasoning stats are stored in the ``M`` metrics dictionary
 
     # Results
     intermediate: list[dict[str, Any]] = field(default_factory=list)  # trace of {op, in, out}
