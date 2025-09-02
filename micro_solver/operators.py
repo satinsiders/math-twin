@@ -255,6 +255,84 @@ class TransformOperator(Operator):
 
 
 @dataclass
+class DiffOperator(Operator):
+    """Differentiate a derived expression.
+
+    Expects ``state.derived['expression']`` as a SymPy parsable string and an
+    optional ``state.derived['variable']`` (defaults to ``x``).  The derivative
+    is stored in ``state.derived['derivative']``.
+
+    Progress signal: change in string length between the original expression
+    and the derivative (positive when the derivative is shorter).
+    """
+
+    name: str = "diff"
+
+    def applicable(self, state: MicroState) -> bool:  # pragma: no cover - trivial
+        deriv = state.derived
+        return isinstance(deriv, dict) and "expression" in deriv
+
+    def apply(self, state: MicroState) -> Tuple[MicroState, float]:
+        deriv = state.derived
+        expr = deriv.get("expression") if isinstance(deriv, dict) else None
+        if expr is None:
+            return state, 0.0
+        try:
+            import sympy as sp
+
+            var = deriv.get("variable", "x") if isinstance(deriv, dict) else "x"
+            sym = sp.Symbol(str(var))
+            expr_sym = sp.sympify(str(expr))
+            deriv = sp.diff(expr_sym, sym)
+            result = sp.sstr(deriv)
+            if isinstance(state.derived, dict):
+                state.derived["derivative"] = result
+            delta = float(len(str(expr)) - len(result))
+            return state, delta
+        except Exception:
+            return state, 0.0
+
+
+@dataclass
+class IntegrateOperator(Operator):
+    """Integrate a derived expression symbolically.
+
+    Expects ``state.derived['expression']`` as a SymPy parsable string and an
+    optional ``state.derived['variable']`` (defaults to ``x``).  The antiderivative
+    is stored in ``state.derived['integral']``.
+
+    Progress signal: change in string length between the original expression
+    and the integral (positive when the integral is shorter).
+    """
+
+    name: str = "integrate"
+
+    def applicable(self, state: MicroState) -> bool:  # pragma: no cover - trivial
+        deriv = state.derived
+        return isinstance(deriv, dict) and "expression" in deriv
+
+    def apply(self, state: MicroState) -> Tuple[MicroState, float]:
+        deriv = state.derived
+        expr = deriv.get("expression") if isinstance(deriv, dict) else None
+        if expr is None:
+            return state, 0.0
+        try:
+            import sympy as sp
+
+            var = deriv.get("variable", "x") if isinstance(deriv, dict) else "x"
+            sym = sp.Symbol(str(var))
+            expr_sym = sp.sympify(str(expr))
+            integ = sp.integrate(expr_sym, sym)
+            result = sp.sstr(integ)
+            if isinstance(state.derived, dict):
+                state.derived["integral"] = result
+            delta = float(len(str(expr)) - len(result))
+            return state, delta
+        except Exception:
+            return state, 0.0
+
+
+@dataclass
 class CaseSplitOperator(Operator):
     """Split simple squared equalities into linear cases.
 
@@ -510,4 +588,6 @@ DEFAULT_OPERATORS: list[Operator] = [
     GridRefineOperator(),
     QuadratureOperator(),
     RationalizeOperator(),
+    DiffOperator(),
+    IntegrateOperator(),
 ]
