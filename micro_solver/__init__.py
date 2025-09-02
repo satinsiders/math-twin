@@ -23,8 +23,9 @@ from .operators import (
     FeasibleSampleOperator,
     SolveOperator,
     VerifyOperator,
+    DEFAULT_OPERATORS,
 )  # noqa: F401
-from .scheduler import solve  # noqa: F401
+from .scheduler import solve, solve_with_defaults  # noqa: F401
 
 __all__ = [
     "MicroState",
@@ -39,6 +40,8 @@ __all__ = [
     "FeasibleSampleOperator",
     "SolveOperator",
     "VerifyOperator",
+    "DEFAULT_OPERATORS",
     "solve",
+    "solve_with_defaults",
 ]
 
