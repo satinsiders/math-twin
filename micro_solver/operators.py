@@ -174,3 +174,16 @@ class VerifyOperator(Operator):
             state.final_answer = candidate
             return state, 1.0
         return state, 0.0
+
+
+# Default operator pool used by the high-level scheduler entrypoint.
+#
+# The set is intentionally small; it demonstrates the operator protocol with a
+# mix of symbolic and validation steps while keeping the scheduling loop
+# lightweight.  Additional operators can be appended by callers as needed.
+DEFAULT_OPERATORS: list[Operator] = [
+    SolveOperator(),
+    VerifyOperator(),
+    SimplifyOperator(),
+]
+

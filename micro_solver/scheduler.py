@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Sequence
 
 from .state import MicroState
-from .operators import Operator
+from .operators import Operator, DEFAULT_OPERATORS
 from .steps_meta import _micro_monitor_dof
 from .certificate import build_certificate
 
@@ -68,3 +68,10 @@ def solve(state: MicroState, operators: Sequence[Operator], *, max_iters: int = 
     except Exception:
         pass
     return state
+
+
+def solve_with_defaults(state: MicroState, *, max_iters: int = 10) -> MicroState:
+    """Solve ``state`` using the built-in default operator pool."""
+
+    return solve(state, DEFAULT_OPERATORS, max_iters=max_iters)
+
