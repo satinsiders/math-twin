@@ -12,8 +12,9 @@ def _micro_extract_candidate(state: MicroState) -> MicroState:
     expr: Optional[str] = None
     try:
         target_expr = None
-        if isinstance(state.R["symbolic"]["canonical_repr"], dict):
-            target_expr = state.R["symbolic"]["canonical_repr"].get("target")
+        cr = state.canonical_repr
+        if isinstance(cr, dict):
+            target_expr = cr.get("target")
         if isinstance(target_expr, str) and target_expr.strip():
             ok_t, val_t = evaluate_with_env(target_expr, state.V["symbolic"]["env"] or {})
             if ok_t:
@@ -134,8 +135,9 @@ def _infer_target_var(state: MicroState) -> Optional[str]:
     except Exception:
         pass
     try:
-        if isinstance(state.R["symbolic"]["canonical_repr"], dict):
-            tgt = state.R["symbolic"]["canonical_repr"].get("target")
+        cr = state.canonical_repr
+        if isinstance(cr, dict):
+            tgt = cr.get("target")
             if isinstance(tgt, str) and tgt.strip():
                 if "=" in tgt:
                     lhs = tgt.split("=", 1)[0]

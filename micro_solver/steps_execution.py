@@ -52,12 +52,13 @@ def _micro_execute_plan(state: MicroState, *, max_iters: Optional[int] = None) -
 
         base_hist = [{"action": (st or {}).get("action")} for st in (state.plan_steps or [])]
         hist = base_hist + [{"action": h.get("action"), "ok": h.get("ok"), "reason": h.get("reason")} for h in atomic_history]
+        cr = state.canonical_repr
         ap_out, ap_err = _invoke(
             A.AtomicPlannerAgent,
             {
                 "relations": state.C["symbolic"],
                 "goal": state.goal,
-                "canonical_target": (state.R["symbolic"]["canonical_repr"] or {}).get("target") if isinstance(state.R["symbolic"]["canonical_repr"], dict) else None,
+                "canonical_target": (cr or {}).get("target") if isinstance(cr, dict) else None,
                 "env": state.V["symbolic"]["env"],
                 "history": hist,
             },
