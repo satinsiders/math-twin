@@ -505,6 +505,12 @@ def solve_for(relations: list[str], target: Optional[str]) -> list[str]:
     """
     if not target:
         return []
+    # Attempt rank repair before invoking heavy solves
+    try:
+        from .constraint_analysis import attempt_rank_repair
+        relations, _ = attempt_rank_repair(relations)
+    except Exception:
+        pass
     try:
         import sympy as sp
         sym = sp.Symbol(str(target))
@@ -552,6 +558,12 @@ def solve_any(relations: list[str]) -> list[str]:
     Returns a list of solution expressions (as strings) that are fully determined
     (i.e., have no free symbols). On failure, returns [].
     """
+    # Attempt rank repair before heavy solving
+    try:
+        from .constraint_analysis import attempt_rank_repair
+        relations, _ = attempt_rank_repair(relations)
+    except Exception:
+        pass
     try:
         import sympy as sp
     except Exception:

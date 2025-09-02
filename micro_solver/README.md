@@ -62,6 +62,7 @@ Deterministic Helpers
 - `verify_candidate`: equality/inequality substitution checks for a candidate
 - `rewrite_relations`: atomic “both‑sides” operations (add/sub/mul/div), substitute, expand, factor, simplify
 - `solve_for`: direct SymPy solve for the inferred target variable
+- `constraint_analysis`: numeric Jacobian and rank-repair helpers used before expensive solves
 
 Plan Lint (Policy Tester)
 -------------------------
