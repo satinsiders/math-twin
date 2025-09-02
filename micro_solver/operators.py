@@ -8,7 +8,7 @@ observed progress rather than a fixed strategy tree.
 """
 
 from dataclasses import dataclass
-from typing import Tuple
+from typing import Tuple, Any
 
 from .state import MicroState
 from .sym_utils import (
@@ -17,7 +17,39 @@ from .sym_utils import (
     verify_candidate,
     solve_for,
     solve_any,
+    parse_relation_sides,
 )
+
+
+def _apply_env(relations: list[str], env: dict[str, Any]) -> list[str]:
+    """Return relations with known environment bindings substituted."""
+    if not env:
+        return relations
+    try:
+        import sympy as sp
+        from sympy.parsing.sympy_parser import (
+            implicit_multiplication_application,
+            parse_expr,
+            standard_transformations,
+        )
+
+        trans = (*standard_transformations, implicit_multiplication_application)
+        rep = {sp.Symbol(k): parse_expr(str(v), transformations=trans) for k, v in env.items()}
+        new_rels: list[str] = []
+        for r in relations:
+            try:
+                op, lhs, rhs = parse_relation_sides(r)
+                if op != "=":
+                    new_rels.append(r)
+                    continue
+                L = parse_expr(lhs, transformations=trans).xreplace(rep)
+                R = parse_expr(rhs, transformations=trans).xreplace(rep)
+                new_rels.append(f"{sp.sstr(L)} = {sp.sstr(R)}")
+            except Exception:
+                new_rels.append(r)
+        return new_rels
+    except Exception:
+        return relations
 
 
 class Operator:
@@ -98,10 +130,15 @@ class SolveOperator(Operator):
         )
 
     def apply(self, state: MicroState) -> Tuple[MicroState, float]:
-        target = state.variables[0] if state.variables else None
-        sols = solve_for(state.relations, target)
+        # Pick the first variable that is not yet bound in the environment
+        target = next((v for v in state.variables if v not in state.env), None)
+
+        # Substitute known bindings into the relations before solving
+        rels = _apply_env(state.relations, state.env)
+
+        sols = solve_for(rels, target) if target else []
         if not sols:
-            sols = solve_any(state.relations)
+            sols = solve_any(rels)
         if sols:
             state.candidate_answers.extend(sols)
             return state, 1.0
@@ -126,8 +163,14 @@ class VerifyOperator(Operator):
             candidate = str(state.candidate_answers[-1])
         except Exception:
             return state, 0.0
-        var = state.variables[0] if state.variables else None
-        if verify_candidate(state.relations, candidate, varname=var):
+
+        # Choose the variable corresponding to the candidate: first unbound symbol
+        var = next((v for v in state.variables if v not in state.env), None)
+
+        # Substitute known bindings into the relations before verification
+        rels = _apply_env(state.relations, state.env)
+
+        if verify_candidate(rels, candidate, varname=var):
             state.final_answer = candidate
             return state, 1.0
         return state, 0.0
