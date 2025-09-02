@@ -58,11 +58,15 @@ def verify_candidate(relations: list[str], candidate: str, *, varname: Optional[
             return parse_expr(side, transformations=(*standard_transformations, implicit_multiplication_application))
 
         def _parse_relation(rel: str) -> Tuple[str, Any, Any]:  # op, lhs, rhs
-            # Support =, <=, >=, <, >, !=
-            m = re.search(r"(<=|>=|!=|=|<|>)", rel)
+            # Support =, <=, >=, <, >, != plus Unicode ≤, ≥ (normalised)
+            m = re.search(r"(<=|>=|!=|=|<|>|≤|≥)", rel)
             if not m:
                 return "=", _parse_side(rel), sp.Integer(0)
             op = m.group(1)
+            if op == "≤":
+                op = "<="
+            elif op == "≥":
+                op = ">="
             lhs = rel[: m.start(1)]
             rhs = rel[m.end(1) :]
             return op, _parse_side(lhs), _parse_side(rhs)
@@ -212,7 +216,7 @@ def _clean_for_sympy(s: str) -> str:
     try:
         s2 = s2.replace("$", "")
         s2 = s2.replace("\u2212", "-")
-        if not re.search(r"(<=|>=|!=|=|<|>)", s2):
+        if not re.search(r"(<=|>=|!=|=|<|>|≤|≥)", s2):
             s2 = re.split(r"\bis\b", s2, 1)[0].strip()
     except Exception:
         pass
@@ -233,14 +237,18 @@ def _parse_expr(s: str):  # internal helper
 def parse_relation_sides(rel: str) -> Tuple[str, str, str]:
     """Return (op, lhs_str, rhs_str) for a relation string.
 
-    Recognizes =, <=, >=, <, >, !=.
+    Recognizes =, <=, >=, <, >, != and Unicode ≤, ≥ (normalised to <=, >=).
     If no operator is found, returns op='' (empty), lhs=rel, rhs=''.
     This allows callers to distinguish genuine equalities from bare expressions.
     """
-    m = re.search(r"(<=|>=|!=|=|<|>)", rel)
+    m = re.search(r"(<=|>=|!=|=|<|>|≤|≥)", rel)
     if not m:
         return "", rel, ""
     op = m.group(1)
+    if op == "≤":
+        op = "<="
+    elif op == "≥":
+        op = ">="
     lhs = rel[: m.start(1)]
     rhs = rel[m.end(1) :]
     return op, lhs.strip(), rhs.strip()
@@ -299,8 +307,8 @@ def rewrite_relations(relations: list[str], step: dict) -> list[str]:
         return relations
 
     def _lr(expr: str) -> Tuple[Any, Any]:
-        if re.search(r"(<=|>=|!=|=|<|>)", expr):
-            opm = re.search(r"(<=|>=|!=|=|<|>)", expr)
+        if re.search(r"(<=|>=|!=|=|<|>|≤|≥)", expr):
+            opm = re.search(r"(<=|>=|!=|=|<|>|≤|≥)", expr)
             lhs = expr[: opm.start(1)]
             rhs = expr[opm.end(1) :]
             return _parse_expr(lhs), _parse_expr(rhs)

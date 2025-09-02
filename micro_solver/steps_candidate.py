@@ -45,7 +45,7 @@ def _micro_extract_candidate(state: MicroState) -> MicroState:
     if expr is None:
         for r in reversed(state.C["symbolic"]):
             op, lhs, rhs = parse_relation_sides(r)
-            if _re.search(r"(<=|>=|!=|=|<|>)", r):
+            if _re.search(r"(<=|>=|!=|=|<|>|≤|≥)", r):
                 continue
             ok, _val = evaluate_numeric(r)
             if ok:
