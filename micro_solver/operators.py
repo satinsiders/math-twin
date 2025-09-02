@@ -130,15 +130,23 @@ class SolveOperator(Operator):
         )
 
     def apply(self, state: MicroState) -> Tuple[MicroState, float]:
-        # Pick the first variable that is not yet bound in the environment
+        # Pick the first variable that is not yet bound in the environment.
+        # When all variables are bound already, fall back to the first variable
+        # so that its value can still be surfaced as a candidate answer.
         target = next((v for v in state.variables if v not in state.env), None)
+        if target is None and state.variables:
+            target = state.variables[0]
 
         # Substitute known bindings into the relations before solving
         rels = _apply_env(state.relations, state.env)
 
-        sols = solve_for(rels, target) if target else []
-        if not sols:
-            sols = solve_any(rels)
+        sols: list[Any]
+        if target in state.env:
+            sols = [str(state.env[target])]
+        else:
+            sols = solve_for(rels, target) if target else []
+            if not sols:
+                sols = solve_any(rels)
         if sols:
             state.candidate_answers.extend(sols)
             return state, 1.0
