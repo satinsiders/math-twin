@@ -10,6 +10,8 @@ from micro_solver.operators import (
     GridRefineOperator,
     QuadratureOperator,
     RationalizeOperator,
+    DomainPruneOperator,
+    FeasibleSampleOperator,
 )
 
 
@@ -43,7 +45,7 @@ def test_bound_infer_operator_collects_bounds() -> None:
     state = MicroState()
     state.relations = ["x >= 0", "x < 5"]
     state, delta = BoundInferOperator().apply(state)
-    assert state.derived["bounds"]["x"] == (0.0, 5.0)
+    assert state.domain["x"] == (0.0, 5.0)
     assert delta == 2
 
 
@@ -78,3 +80,28 @@ def test_rationalize_operator_converts_candidates() -> None:
     state, delta = RationalizeOperator().apply(state)
     assert state.candidate_answers == ["1/2", "2"]
     assert delta == 1.0
+
+
+def test_feasible_sample_operator_respects_bounds() -> None:
+    state = MicroState()
+    state.variables = ["x"]
+    state.relations = ["x >= 1", "x <= 2"]
+    state, _ = BoundInferOperator().apply(state)
+    import random
+
+    random.seed(0)
+    state, _ = FeasibleSampleOperator().apply(state)
+    sample = state.derived["sample"]["x"]
+    assert 1.0 <= sample <= 2.0
+
+
+def test_domain_prune_operator_removes_invalid_samples() -> None:
+    state = MicroState()
+    state.variables = ["x", "y"]
+    state.domain = {"x": (0.0, 1.0)}
+    state.qual = {"y": {"nonnegative"}}
+    state.derived["sample"] = {"x": 2.0, "y": -1.0}
+    state, delta = DomainPruneOperator().apply(state)
+    assert "x" not in state.derived["sample"]
+    assert "y" not in state.derived["sample"]
+    assert delta == 2.0

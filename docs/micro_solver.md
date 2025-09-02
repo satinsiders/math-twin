@@ -71,6 +71,7 @@ Options:
 
 - Iteration: `scheduler.solve_with_defaults` iteratively applies operators guided by progress metrics; a stall counter guards against infinite loops.
 - SymPy integration: `micro_solver/sym_utils.py` provides `simplify_expr` and `verify_candidate`. These helpers are defensive and degrade gracefully if SymPy is not available.
+- Constraint analysis: `micro_solver.constraint_analysis` computes numeric Jacobians, flags redundant constraints, and attempts simple rank repairs before invoking expensive solves.
 
 Plan Lint (Policy Tester)
 -------------------------

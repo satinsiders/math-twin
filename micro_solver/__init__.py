@@ -26,6 +26,10 @@ from .operators import (
     DEFAULT_OPERATORS,
 )  # noqa: F401
 from .scheduler import solve, solve_with_defaults  # noqa: F401
+from .constraint_analysis import (  # noqa: F401
+    mark_redundant_constraints,
+    attempt_rank_repair,
+)
 
 __all__ = [
     "MicroState",
@@ -43,5 +47,7 @@ __all__ = [
     "DEFAULT_OPERATORS",
     "solve",
     "solve_with_defaults",
+    "mark_redundant_constraints",
+    "attempt_rank_repair",
 ]
 

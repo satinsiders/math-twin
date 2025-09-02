@@ -102,6 +102,9 @@ class MicroState:
     env: dict[str, Any] = field(default_factory=dict)  # symbol table / bindings
     equations: list[str] = field(default_factory=list)
     derived: dict[str, Any] = field(default_factory=dict)
+    # Domain knowledge extracted from constraints
+    domain: dict[str, tuple[float | None, float | None]] = field(default_factory=dict)
+    qual: dict[str, set[str]] = field(default_factory=dict)
 
     # Meta‑reasoning stats
     eq_count: int = 0
