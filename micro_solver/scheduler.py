@@ -85,8 +85,15 @@ def _bounds_volume(bounds: dict[str, tuple[float | None, float | None]] | None) 
 def update_metrics(state: MicroState) -> MicroState:
     """Refresh solver metrics like degrees of freedom and progress score."""
 
+    prev_metrics = dict(getattr(state, "M", {}))
     state = _micro_monitor_dof(state)
     metrics = dict(getattr(state, "M", {}))
+
+    prev_dof = prev_metrics.get("degrees_of_freedom")
+    dof = metrics.get("degrees_of_freedom")
+    if dof is not None:
+        if dof < 0 or (prev_dof is not None and prev_dof > 0 and dof > 0):
+            metrics["needs_replan"] = True
 
     prev_res = metrics.get("residual_l2")
     res = _total_residual_l2(state)
