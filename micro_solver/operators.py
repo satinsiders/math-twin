@@ -114,7 +114,7 @@ class FeasibleSampleOperator(Operator):
         import random
 
         sample: dict[str, float] = {}
-        for v in state.variables:
+        for v in state.V["symbolic"]["variables"]:
             low, high = state.domain.get(v, (None, None))
             tags = state.qual.get(v, set())
             # Apply qualitative sign hints
@@ -134,7 +134,7 @@ class FeasibleSampleOperator(Operator):
             if low >= high:
                 high = low + 1.0
             sample[v] = random.uniform(low, high)
-        state.derived["sample"] = sample
+        state.V["symbolic"]["derived"]["sample"] = sample
         return state, 0.0
 
 
@@ -146,7 +146,7 @@ class SolveOperator(Operator):
 
     def applicable(self, state: MicroState) -> bool:  # pragma: no cover - trivial
         return (
-            state.degrees_of_freedom == 0
+            state.M.get("degrees_of_freedom", 0) == 0
             and bool(state.C["symbolic"])
             and not state.A["symbolic"]["candidates"]
         )
@@ -183,7 +183,7 @@ class VerifyOperator(Operator):
 
     def applicable(self, state: MicroState) -> bool:  # pragma: no cover - trivial
         return (
-            state.degrees_of_freedom == 0
+            state.M.get("degrees_of_freedom", 0) == 0
             and bool(state.A["symbolic"]["candidates"])
             and state.A["symbolic"]["final"] is None
         )
@@ -333,8 +333,7 @@ class BoundInferOperator(Operator):
                 bounds[key] = (low, high)
             if changes:
                 state.domain = bounds
-                # keep in derived for backward compatibility with older agents
-                state.derived["bounds"] = bounds
+                state.V["symbolic"]["derived"]["bounds"] = bounds
             return state, float(changes)
         except Exception:
             return state, 0.0
@@ -349,11 +348,11 @@ class DomainPruneOperator(Operator):
     name: str = "domain_prune"
 
     def applicable(self, state: MicroState) -> bool:  # pragma: no cover - trivial
-        sample = state.derived.get("sample")
+        sample = state.V["symbolic"]["derived"].get("sample")
         return isinstance(sample, dict) and bool(sample)
 
     def apply(self, state: MicroState) -> Tuple[MicroState, float]:
-        sample = dict(state.derived.get("sample", {}))
+        sample = dict(state.V["symbolic"]["derived"].get("sample", {}))
         removed = 0
         for k, v in list(sample.items()):
             low, high = state.domain.get(k, (None, None))
@@ -379,7 +378,7 @@ class DomainPruneOperator(Operator):
                 removed += 1
                 continue
         if removed:
-            state.derived["sample"] = sample
+            state.V["symbolic"]["derived"]["sample"] = sample
         return state, float(removed)
 
 

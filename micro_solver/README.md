@@ -28,7 +28,7 @@ Default graph (simplified names):
 8) schema → 9) strategies → 10) execute_plan (scheduler) →
 11) solve_sympy → 12) extract_candidate → 13) simplify_candidate_sympy → 14) verify_sympy
 
-- Early exit: the runner exits as soon as `final_answer` is set and QA passes.
+- Early exit: the runner exits as soon as `A['symbolic']['final']` is set and QA passes.
 - Retries: each step retries with QA feedback up to a small budget.
 
 Agents (By Stage)
@@ -78,7 +78,7 @@ Why Steps 13–16 If Execute‑Plan Computes?
   - `extract_candidate`: language‑agnostic selection that prioritizes numeric‑evaluable expressions from the latest relations; falls back to equality RHS or last relation.
   - `simplify_candidate_sympy`: canonicalize and numerically evaluate when fully determined.
   - `verify_sympy`: confirm the candidate satisfies the relations; fall back to `VerifyAgent` if needed.
-- Early exit is enabled: if `final_answer` is already set after execute‑plan (or any later step), the runner stops immediately, so the finishing steps run only when needed.
+- Early exit is enabled: if `A['symbolic']['final']` is already set after execute‑plan (or any later step), the runner stops immediately, so the finishing steps run only when needed.
 
 Design Goals & Limits
 ---------------------

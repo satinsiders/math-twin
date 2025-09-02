@@ -5,10 +5,10 @@ import pytest
 
 def test_certificate_records_best_candidate() -> None:
     state = MicroState()
-    state.variables = ["x"]
-    state.relations = ["x + 2 = 5"]
+    state.V["symbolic"]["variables"] = ["x"]
+    state.C["symbolic"] = ["x + 2 = 5"]
     result = solve_with_defaults(state, max_iters=4)
-    cert = result.certificate
+    cert = result.A["symbolic"].get("certificate")
     assert cert is not None
     assert cert.verified is True
     assert str(cert.value) == "3"

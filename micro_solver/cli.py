@@ -42,13 +42,13 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 1
 
     # Prefer a concrete final answer. If absent, surface an informative fallback
-    if out.final_answer is not None:
-        print(out.final_answer)
+    if out.A["symbolic"].get("final") is not None:
+        print(out.A["symbolic"].get("final"))
         return 0
 
     # Fallbacks when no final answer
-    if out.candidate_answers:
-        last = out.candidate_answers[-1]
+    if out.A["symbolic"]["candidates"]:
+        last = out.A["symbolic"]["candidates"][-1]
         if args.verbose:
             print(f"candidate-only (unverified): {last}")
         else:
@@ -57,8 +57,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 0
 
     # No candidate either: print a concise explanation when available
-    if out.final_explanation:
-        print(out.final_explanation)
+    if out.A["symbolic"].get("explanation"):
+        print(out.A["symbolic"].get("explanation"))
     else:
         print("No final answer; no candidate extracted. Use --verbose for details.")
     return 0

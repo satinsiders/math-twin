@@ -45,17 +45,17 @@ def _compute_residuals(relations: list[str], candidate: Any, *, varname: Optiona
 def build_certificate(state: Any) -> Candidate:
     """Create a :class:`Candidate` summary for ``state``.
 
-    Uses ``state.final_answer`` when available, otherwise falls back to the last
-    entry in ``state.candidate_answers``.  The candidate always includes the
-    residuals against the original ``state.relations`` and a ``verified`` flag
+    Uses ``state.A['symbolic']['final']`` when available, otherwise falls back to the last
+    entry in ``state.A['symbolic']['candidates']``.  The candidate always includes the
+    residuals against the original ``state.C['symbolic']`` and a ``verified`` flag
     indicating whether the candidate passed verification.
     """
 
-    cand_val = getattr(state, "final_answer", None)
+    cand_val = state.A["symbolic"].get("final")
     verified = cand_val is not None
     if cand_val is None:
         try:
-            cand_val = state.candidate_answers[-1]
+            cand_val = state.A["symbolic"]["candidates"][-1]
         except Exception:
             cand_val = None
     residuals: Dict[str, float] = {}
@@ -67,5 +67,5 @@ def build_certificate(state: Any) -> Candidate:
             var = _infer_target_var(state)
         except Exception:
             var = None
-        residuals = _compute_residuals(list(getattr(state, "relations", [])), cand_val, varname=var)
+        residuals = _compute_residuals(list(state.C["symbolic"]), cand_val, varname=var)
     return Candidate(value=cand_val, residuals=residuals, verified=verified)

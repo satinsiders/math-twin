@@ -45,7 +45,7 @@ Why This Helps
 --------------
 - Reduces per‑agent load: each instruction is tiny and avoids multi‑step reasoning.
 - QA at every hop: quick detection of malformed outputs before errors compound.
-- Traceability: `MicroState.intermediate` records atomic operations with inputs/outputs.
+- Traceability: `MicroState.A['symbolic']['intermediate']` records atomic operations with inputs/outputs.
 - Extensibility: add new micro‑agents (e.g., geometry sub‑pipelines) without altering the orchestrator.
 
 Usage (Programmatic)
@@ -58,7 +58,7 @@ graph = MicroGraph(steps=DEFAULT_MICRO_STEPS)
 runner = MicroRunner(graph)
 state = MicroState(problem_text="Solve 2x + 3 = 11 for x.")
 out = runner.run(state)
-print(out.final_answer)
+print(out.A["symbolic"]["final"])
 ```
 
 CLI

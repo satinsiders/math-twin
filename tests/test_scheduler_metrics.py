@@ -31,26 +31,25 @@ class MetricOp(Operator):
 
 
 def test_update_metrics_tracks_progress() -> None:
-    state = MicroState(
-        relations=["x = 3", "x >= 0", "x <= 10"],
-        variables=["x"],
-        env={"x": 5},
-        derived={"bounds": {"x": (0.0, 10.0)}},
-    )
+    state = MicroState()
+    state.C["symbolic"] = ["x = 3", "x >= 0", "x <= 10"]
+    state.V["symbolic"]["variables"] = ["x"]
+    state.V["symbolic"]["env"] = {"x": 5}
+    state.V["symbolic"]["derived"] = {"bounds": {"x": (0.0, 10.0)}}
     state = update_metrics(state)
     assert state.M["residual_l2"] == pytest.approx(2.0)
     assert state.M["residual_l2_change"] == pytest.approx(0.0)
     assert state.M["ineq_satisfied"] == pytest.approx(2.0)
     assert state.M["bounds_volume"] == pytest.approx(10.0)
-    p1 = state.progress_score
+    p1 = state.M["progress_score"]
 
-    state.env["x"] = 3
-    state.derived["bounds"]["x"] = (0.0, 8.0)
+    state.V["symbolic"]["env"]["x"] = 3
+    state.V["symbolic"]["derived"]["bounds"]["x"] = (0.0, 8.0)
     state = update_metrics(state)
     assert state.M["residual_l2"] == pytest.approx(0.0)
     assert state.M["residual_l2_change"] == pytest.approx(2.0)
     assert state.M["bounds_volume_reduction"] == pytest.approx(2.0)
-    assert state.progress_score > p1
+    assert state.M["progress_score"] > p1
 
 
 def test_select_operator_uses_metric_scores() -> None:
