@@ -66,6 +66,7 @@ class MicroState:
     progress_score: float = 0.0
     stalls: int = 0
     violations: int = 0
+    M: dict[str, float] = field(default_factory=dict)
 
     # Results
     intermediate: list[dict[str, Any]] = field(default_factory=list)  # trace of {op, in, out}
