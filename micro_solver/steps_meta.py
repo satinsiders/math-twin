@@ -8,7 +8,7 @@ stages can decide whether a replan is required.
 """
 
 from .state import MicroState
-from .sym_utils import estimate_jacobian_rank
+from .sym_utils import estimate_jacobian_rank, parse_relation_sides
 
 
 def _micro_monitor_dof(state: MicroState) -> MicroState:
@@ -26,9 +26,7 @@ def _micro_monitor_dof(state: MicroState) -> MicroState:
     eq_relations = [r for r in state.C["symbolic"] if "=" in r]
     eq_count = len(eq_relations)
     ineq_count = sum(
-        1
-        for r in state.C["symbolic"]
-        if any(op in r for op in ("<", ">", "≤", "≥")) and "=" not in r
+        1 for r in state.C["symbolic"] if parse_relation_sides(r)[0] in ("<", "<=", ">", ">=")
     )
 
     rank = estimate_jacobian_rank(eq_relations, unknowns)
