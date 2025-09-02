@@ -21,6 +21,7 @@ from .state import MicroState
 from .agents import MicroQAAgent
 from .certificate import build_certificate
 from . import scheduler
+from .plan_policy import lint_plan as lint_plan_steps
 
 
 @dataclass
@@ -82,8 +83,16 @@ class MicroRunner:
             return True, "pass"
         return False, out_text or "micro-qa:unknown-failure"
 
-    def run(self, inputs: MicroState) -> MicroState:
+    def run(self, inputs: MicroState, *, lint_plan: bool = True) -> MicroState:
         state = copy.deepcopy(inputs)
+        if lint_plan and state.plan_steps:
+            lint_res = lint_plan_steps(state.plan_steps)
+            if not lint_res.get("ok", False):
+                issues = ", ".join(lint_res.get("issues", []))
+                err = f"plan-policy-violations:{issues}"
+                self.logger.error(err)
+                state.error = err
+                raise RuntimeError(err)
         # Step-specific minimal outputs for QA
         def _build_step_out(step_name: str, before: MicroState, after: MicroState) -> dict[str, Any]:  # noqa: ANN401 - generic
             try:

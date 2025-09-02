@@ -30,7 +30,7 @@ def test_tokenize_includes_tokens_per_sentence(monkeypatch):
 
     runner = MicroRunner(MicroGraph([_micro_normalize, _micro_tokenize]))
     state = MicroState(problem_text="hello world. bye")
-    runner.run(state)
+    runner.run(state, lint_plan=False)
 
     out = captured["payload"]["out"]
     assert out["tokens_per_sentence"] == [["hello", "world"], ["bye"]]
