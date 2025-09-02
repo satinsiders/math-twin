@@ -31,12 +31,12 @@ class MetricOp(Operator):
 
 
 def test_update_metrics_tracks_progress() -> None:
-    state = MicroState(
-        relations=["x = 3", "x >= 0", "x <= 10"],
-        variables=["x"],
-        env={"x": 5},
-        derived={"bounds": {"x": (0.0, 10.0)}},
-    )
+    state = MicroState.from_legacy({
+        "relations": ["x = 3", "x >= 0", "x <= 10"],
+        "variables": ["x"],
+        "env": {"x": 5},
+        "derived": {"bounds": {"x": (0.0, 10.0)}},
+    })
     state = update_metrics(state)
     assert state.M["residual_l2"] == pytest.approx(2.0)
     assert state.M["residual_l2_change"] == pytest.approx(0.0)
@@ -63,3 +63,22 @@ def test_select_operator_uses_metric_scores() -> None:
     state.M["ineq_satisfied"] = 0.0
     chosen = select_operator(state, ops)
     assert isinstance(chosen, BaselineOp)
+
+
+def test_update_metrics_flags_underdetermined_triggers_replan() -> None:
+    state = MicroState.from_legacy({"goal": "x", "variables": ["x"], "relations": [], "env": {}, "derived": {}})
+    state = update_metrics(state)
+    assert state.needs_replan
+    assert state.status == "under-determined"
+
+
+def test_update_metrics_flags_overconstrained_refuses() -> None:
+    state = MicroState.from_legacy({
+        "relations": ["x = 2"],
+        "variables": ["x"],
+        "env": {"x": 1},
+        "derived": {},
+    })
+    state = update_metrics(state)
+    assert state.status == "over-constrained"
+    assert not state.needs_replan

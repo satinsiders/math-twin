@@ -381,6 +381,17 @@ class MicroState:
     def violations(self, value: int) -> None:
         self._m_set("violations", value)
 
+    @property
+    def status(self) -> Optional[str]:
+        return self._m_get("status", None)
+
+    @status.setter
+    def status(self, value: Optional[str]) -> None:
+        if value is None:
+            self.M.pop("status", None)
+        else:
+            self._m_set("status", value)
+
     # ------------------------------------------------------------------
     # Migration helpers -------------------------------------------------
     @classmethod

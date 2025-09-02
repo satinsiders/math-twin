@@ -105,6 +105,18 @@ def update_metrics(state: MicroState) -> MicroState:
 
     state.M = metrics
 
+    dof = state.degrees_of_freedom
+    single_goal = bool(state.goal) or len(state.V["symbolic"].get("variables", [])) == 1
+    if dof > 0 and single_goal:
+        state.needs_replan = True
+        state.status = "under-determined"
+    else:
+        state.needs_replan = False
+        if dof < 0 or (dof == 0 and res > 0):
+            state.status = "over-constrained"
+        else:
+            state.status = None
+
     state.progress_score = float(
         -abs(state.degrees_of_freedom)
         + metrics.get("residual_l2_change", 0.0)
