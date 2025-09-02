@@ -97,6 +97,31 @@ class MicroState:
     current_step_idx: int = 0
 
     # Orchestration / diagnostics
+
+    # Working memory (calculation context)
+    env: dict[str, Any] = field(default_factory=dict)  # symbol table / bindings
+    equations: list[str] = field(default_factory=list)
+    derived: dict[str, Any] = field(default_factory=dict)
+
+    # Meta‑reasoning stats
+    eq_count: int = 0
+    ineq_count: int = 0
+    jacobian_rank: int = 0
+    degrees_of_freedom: int = 0
+    needs_replan: bool = False
+    progress_score: float = 0.0
+    stalls: int = 0
+    violations: int = 0
+    M: dict[str, float] = field(default_factory=dict)
+
+    # Results
+    intermediate: list[dict[str, Any]] = field(default_factory=list)  # trace of {op, in, out}
+    candidate_answers: list[Any] = field(default_factory=list)
+    final_answer: Optional[Any] = None
+    final_explanation: Optional[str] = None
+    certificate: Optional[dict[str, Any]] = None
+
+    # Control / diagnostics
     qa_feedback: Optional[str] = None
     error: Optional[str] = None
     skip_qa: bool = False
