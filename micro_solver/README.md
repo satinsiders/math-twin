@@ -6,7 +6,7 @@ What It Is
 The micro‑solver is an additive, ultra‑granular multi‑agent pipeline that solves math problems by decomposing them into very small, verifiable steps aligned with a cognitive model:
 
 - Recognition: encode the problem into a structured internal representation.
-- Reasoning: choose a schema/strategy and produce an atomic action plan.
+- Reasoning: retrieve schemas/strategies and let a progress-based scheduler apply operators.
 - Calculation: execute one atomic action at a time, verify, and finish.
 
 It emphasizes strict I/O contracts, deterministic post‑conditions, and per‑step QA. The goal is to minimize per‑agent cognitive load and reduce compounding errors.
@@ -25,8 +25,8 @@ High‑Level Pipeline
 Default graph (simplified names):
 
 1) normalize → 2) tokenize → 3) entities → 4) relations → 5) goal → 6) classify → 7) repr →
-8) schema → 9) strategies → 10) choose_strategy → 11) decompose → 12) execute_plan →
-13) solve_sympy → 14) extract_candidate → 15) simplify_candidate_sympy → 16) verify_sympy
+8) schema → 9) strategies → 10) execute_plan (scheduler) →
+11) solve_sympy → 12) extract_candidate → 13) simplify_candidate_sympy → 14) verify_sympy
 
 - Early exit: the runner exits as soon as `final_answer` is set and QA passes.
 - Retries: each step retries with QA feedback up to a small budget.
@@ -44,9 +44,7 @@ Recognition
 Reasoning
 - `SchemaRetrieverAgent`: schemas[] (named canonical patterns)
 - `StrategyEnumeratorAgent`: strategies[] (micro‑plan names)
-- `PreconditionCheckerAgent`: ok/reasons per strategy
-- `StepDecomposerAgent`: plan_steps[{id, action, args}] (planning‑only; no computed results)
-- `NextActionAgent`: next_step (one atomic action at a time)
+- `scheduler.solve_with_defaults`: progress‑based operator loop
 
 Calculation
 - `RewriteAgent`: applies one atomic algebraic action and returns new_relations

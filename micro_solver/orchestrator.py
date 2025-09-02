@@ -20,6 +20,7 @@ from agents.run import Runner as AgentsRunner  # type: ignore
 from .state import MicroState
 from .agents import MicroQAAgent
 from .certificate import build_certificate
+from . import scheduler
 
 
 @dataclass
@@ -106,51 +107,14 @@ class MicroRunner:
                     return {"schemas": after.schemas}
                 if step_name == "strategies":
                     return {"strategies": after.strategies}
-                if step_name == "choose_strategy":
-                    return {"chosen_strategy": after.chosen_strategy}
                 if step_name == "decompose":
                     return {"plan_steps": after.plan_steps}
                 if step_name == "execute_plan":
-                    atomic = None
-                    score = None
-                    delta = None
-                    eqc = None
-                    nev = None
-                    frees = None
-                    t_bound = None
-                    t_unbound = None
-                    solv = None
-                    try:
-                        if isinstance(after.derived, dict):
-                            atomic = after.derived.get("atomic_iters")
-                            score = after.derived.get("progress_score")
-                            delta = after.derived.get("progress_delta")
-                            eqc = after.derived.get("eq_count")
-                            nev = after.derived.get("num_evaluable")
-                            frees = after.derived.get("free_symbols")
-                            t_bound = after.derived.get("target_bound")
-                            t_unbound = after.derived.get("target_unbound")
-                            solv = after.derived.get("numeric_solvable")
-                    except Exception:
-                        atomic = None
-                    out = {"current_step_idx": after.current_step_idx, "relations": after.relations, "atomic_iters": atomic}
-                    if score is not None:
-                        out["progress_score"] = score
-                    if delta is not None:
-                        out["progress_delta"] = delta
-                    if eqc is not None:
-                        out["eq_count"] = eqc
-                    if nev is not None:
-                        out["num_evaluable"] = nev
-                    if frees is not None:
-                        out["free_symbols"] = frees
-                    if t_bound is not None:
-                        out["target_bound"] = t_bound
-                    if t_unbound is not None:
-                        out["target_unbound"] = t_unbound
-                    if solv is not None:
-                        out["numeric_solvable"] = solv
-                    return out
+                    return {
+                        "relations": after.relations,
+                        "progress_score": getattr(after, "progress_score", None),
+                        "degrees_of_freedom": getattr(after, "degrees_of_freedom", None),
+                    }
                 if step_name == "extract_candidate":
                     last = after.candidate_answers[-1] if after.candidate_answers else None
                     return {"candidate": last}
@@ -207,8 +171,6 @@ class MicroRunner:
                 if step_name == "strategies":
                     names = after.strategies or []
                     return f"strategies={len(names)}: {_trunc(', '.join(map(str, names[:3])))}"
-                if step_name == "choose_strategy":
-                    return f"chosen='{_trunc(after.chosen_strategy)}'"
                 if step_name == "decompose":
                     steps = after.plan_steps or []
                     acts = []
@@ -219,48 +181,16 @@ class MicroRunner:
                             pass
                     return f"plan_steps={len(steps)}: {_trunc(', '.join(acts))}"
                 if step_name == "execute_plan":
-                    atomic = None
-                    score = None
-                    delta = None
-                    eqc = None
-                    nev = None
-                    frees = None
-                    t_bound = None
-                    t_unbound = None
-                    solv = None
-                    try:
-                        if isinstance(after.derived, dict):
-                            atomic = after.derived.get("atomic_iters")
-                            score = after.derived.get("progress_score")
-                            delta = after.derived.get("progress_delta")
-                            eqc = after.derived.get("eq_count")
-                            nev = after.derived.get("num_evaluable")
-                            frees = after.derived.get("free_symbols")
-                            t_bound = after.derived.get("target_bound")
-                            t_unbound = after.derived.get("target_unbound")
-                            solv = after.derived.get("numeric_solvable")
-                    except Exception:
-                        atomic = None
-                    base = f"idx={after.current_step_idx}/{len(after.plan_steps or [])} relations={len(after.relations)}"
+                    base = f"relations={len(after.relations)}"
                     tail = ""
-                    if atomic is not None:
-                        tail += f" atomic={atomic}"
-                    if score is not None:
-                        tail += f" score={score}"
-                    if delta is not None:
-                        tail += f" Δ={delta}"
-                    if eqc is not None:
-                        tail += f" eq={eqc}"
-                    if nev is not None:
-                        tail += f" eval={nev}"
-                    if frees is not None:
-                        tail += f" free={frees}"
-                    if t_bound is not None:
-                        tail += f" tbound={t_bound}"
-                    if t_unbound is not None:
-                        tail += f" tunbound={t_unbound}"
-                    if solv is not None:
-                        tail += f" solv={solv}"
+                    try:
+                        tail += f" dof={after.degrees_of_freedom}"
+                    except Exception:
+                        pass
+                    try:
+                        tail += f" score={after.progress_score}"
+                    except Exception:
+                        pass
                     return base + tail
                 if step_name == "extract_candidate":
                     cand = after.candidate_answers[-1] if after.candidate_answers else None
@@ -288,7 +218,10 @@ class MicroRunner:
                     attempts + 1,
                 )
                 before = copy.deepcopy(state)
-                state = step(state)
+                if name == "execute_plan":
+                    state = scheduler.solve_with_defaults(state)
+                else:
+                    state = step(state)
                 # Emit a quick, human-readable summary for visibility
                 try:
                     summary = _summarize(name, before, state)

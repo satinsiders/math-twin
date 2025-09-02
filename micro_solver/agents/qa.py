@@ -16,7 +16,6 @@ MicroQAAgent = Agent(
         "- relations: require a non‑empty array of strings (algebraic relations). "
         "- extract_candidate: candidate may be numeric or an expression; do not require justification here (verification handles it). "
         "Additional guards for counting tasks (goal mentions 'count' or 'number of'): "
-        "- choose_strategy: reject parity/GF(2) strategies when text says 'exactly k' since they drop cardinality. "
         "- verify: require the final to be a non‑negative integer supported by relations naming the count; reject trivial 0 with no justification."
     ),
     model="gpt-5-nano",

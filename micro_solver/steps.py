@@ -17,7 +17,6 @@ from .steps_recognition import (
 from .steps_reasoning import (
     _micro_schema,
     _micro_strategies,
-    _micro_choose_strategy,
 )
 from .steps_execution import _micro_execute_plan
 from .steps_candidate import (
@@ -41,7 +40,6 @@ DEFAULT_MICRO_STEPS = [
     _micro_repr,
     _micro_schema,
     _micro_strategies,
-    _micro_choose_strategy,
     _micro_execute_plan,
     _micro_monitor_dof,
 ]
@@ -65,7 +63,6 @@ def build_steps(*, max_iters: Optional[int] = None) -> list:
         _micro_repr,
         _micro_schema,
         _micro_strategies,
-        _micro_choose_strategy,
         _exec,
         _micro_monitor_dof,
         _micro_solve_sympy,
