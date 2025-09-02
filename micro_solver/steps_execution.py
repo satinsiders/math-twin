@@ -52,7 +52,7 @@ def _micro_execute_plan(state: MicroState, *, max_iters: Optional[int] = None) -
 
         base_hist = [{"action": (st or {}).get("action")} for st in (state.plan_steps or [])]
         hist = base_hist + [{"action": h.get("action"), "ok": h.get("ok"), "reason": h.get("reason")} for h in atomic_history]
-        cr = state.canonical_repr
+        cr = state.R["symbolic"].get("canonical_repr")
         ap_out, ap_err = _invoke(
             A.AtomicPlannerAgent,
             {

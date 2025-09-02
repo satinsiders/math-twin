@@ -28,7 +28,7 @@ def maybe_eval_target(state: MicroState) -> bool:
     """Evaluate the target expression and record candidate answers."""
     try:
         target_expr = None
-        cr = state.canonical_repr
+        cr = state.R["symbolic"].get("canonical_repr")
         if isinstance(cr, dict):
             target_expr = cr.get("target")
         if isinstance(target_expr, str) and target_expr.strip():
@@ -97,7 +97,7 @@ def target_symbols(state: MicroState) -> set[str]:
             standard_transformations,
         )
         transformations = (*standard_transformations, implicit_multiplication_application)
-        cr = state.canonical_repr
+        cr = state.R["symbolic"].get("canonical_repr")
         tgt = (cr or {}).get("target") if isinstance(cr, dict) else None
         if isinstance(tgt, str) and tgt.strip():
             expr = parse_expr(tgt, transformations=transformations)
@@ -212,7 +212,7 @@ def progress_metrics(state: MicroState) -> tuple[float, int, int, int, int, int,
     except Exception:
         pass
     try:
-        cr = state.canonical_repr
+        cr = state.R["symbolic"].get("canonical_repr")
         target_expr = (cr or {}).get("target") if isinstance(cr, dict) else None
         if isinstance(target_expr, str) and target_expr.strip():
             ok, _ = evaluate_with_env(target_expr, state.V["symbolic"]["env"] or {})

@@ -45,26 +45,26 @@ class MicroRunner:
                 "data": {
                     # Minimal view of state that's generally safe to serialize
                     "problem_text": after.problem_text,
-                    "sentences": after.sentences,
-                    "tokens": after.tokens,
-                    "tokens_per_sentence": after.tokens_per_sentence,
-                    "variables": after.variables,
-                    "constants": after.constants,
-                    "quantities": after.quantities,
-                    "relations": after.relations,
+                    "sentences": after.R["symbolic"].get("sentences"),
+                    "tokens": after.R["symbolic"].get("tokens"),
+                    "tokens_per_sentence": after.R["symbolic"].get("tokens_per_sentence"),
+                    "variables": after.V["symbolic"].get("variables"),
+                    "constants": after.V["symbolic"].get("constants"),
+                    "quantities": after.V["symbolic"].get("quantities"),
+                    "relations": after.C["symbolic"],
                     "goal": after.goal,
                     "problem_type": after.problem_type,
-                    "canonical_repr": after.canonical_repr,
+                    "canonical_repr": after.R["symbolic"].get("canonical_repr"),
                     "schemas": after.schemas,
                     "strategies": after.strategies,
                     "plan_steps": after.plan_steps,
                     "current_step_idx": after.current_step_idx,
-                    "equations": after.equations,
-                    "env": after.env,
-                    "derived": after.derived,
-                    "intermediate": after.intermediate,
-                    "candidate_answers": after.candidate_answers,
-                    "final_answer": after.final_answer,
+                    "equations": after.C["symbolic"],
+                    "env": after.V["symbolic"].get("env"),
+                    "derived": after.V["symbolic"].get("derived"),
+                    "intermediate": after.A["symbolic"].get("intermediate"),
+                    "candidate_answers": after.A["symbolic"].get("candidates"),
+                    "final_answer": after.A["symbolic"].get("final"),
                 },
                 "out": out_obj,
             })
@@ -89,20 +89,24 @@ class MicroRunner:
             try:
                 if step_name == "tokenize":
                     return {
-                        "sentences": after.sentences,
-                        "tokens": after.tokens,
-                        "tokens_per_sentence": getattr(after, "tokens_per_sentence", None),
+                        "sentences": after.R["symbolic"].get("sentences"),
+                        "tokens": after.R["symbolic"].get("tokens"),
+                        "tokens_per_sentence": after.R["symbolic"].get("tokens_per_sentence"),
                     }
                 if step_name == "entities":
-                    return {"variables": after.variables, "constants": after.constants, "quantities": after.quantities}
+                    return {
+                        "variables": after.V["symbolic"].get("variables"),
+                        "constants": after.V["symbolic"].get("constants"),
+                        "quantities": after.V["symbolic"].get("quantities"),
+                    }
                 if step_name == "relations":
-                    return {"relations": after.relations}
+                    return {"relations": after.C["symbolic"]}
                 if step_name == "goal":
                     return {"goal": after.goal}
                 if step_name == "classify":
                     return {"problem_type": after.problem_type}
                 if step_name == "repr":
-                    return {"canonical_repr": after.canonical_repr}
+                    return {"canonical_repr": after.R["symbolic"].get("canonical_repr")}
                 if step_name == "schema":
                     return {"schemas": after.schemas}
                 if step_name == "strategies":
@@ -111,25 +115,25 @@ class MicroRunner:
                     return {"plan_steps": after.plan_steps}
                 if step_name == "execute_plan":
                     return {
-                        "relations": after.relations,
-                        "progress_score": getattr(after, "progress_score", None),
-                        "degrees_of_freedom": getattr(after, "degrees_of_freedom", None),
+                        "relations": after.C["symbolic"],
+                        "progress_score": after.M.get("progress_score"),
+                        "degrees_of_freedom": after.M.get("degrees_of_freedom"),
                     }
                 if step_name == "extract_candidate":
-                    last = after.candidate_answers[-1] if after.candidate_answers else None
+                    last = after.A["symbolic"]["candidates"][-1] if after.A["symbolic"]["candidates"] else None
                     return {"candidate": last}
                 if step_name == "simplify_candidate_sympy":
-                    last = after.candidate_answers[-1] if after.candidate_answers else None
+                    last = after.A["symbolic"]["candidates"][-1] if after.A["symbolic"]["candidates"] else None
                     return {"candidate_simplified": last}
                 if step_name in {"verify_sympy", "verify"}:
-                    return {"final_answer": after.final_answer}
+                    return {"final_answer": after.A["symbolic"].get("final")}
             except Exception:
                 pass
             # Fallback: generic delta
             return {
-                "relations": after.relations,
+                "relations": after.C["symbolic"],
                 "plan_steps": after.plan_steps,
-                "final_answer": after.final_answer,
+                "final_answer": after.A["symbolic"].get("final"),
             }
 
         # Quick human-readable summary per step (verbose logging)
@@ -143,16 +147,16 @@ class MicroRunner:
 
             try:
                 if step_name == "normalize":
-                    return f"normalized_len={len(after.normalized_text or '')}"
+                    return f"normalized_len={len(after.R['symbolic'].get('normalized_text') or '')}"
                 if step_name == "tokenize":
-                    return f"sentences={len(after.sentences)} tokens={len(after.tokens)}"
+                    return f"sentences={len(after.R['symbolic'].get('sentences') or [])} tokens={len(after.R['symbolic'].get('tokens') or [])}"
                 if step_name == "entities":
                     return (
-                        f"vars={len(after.variables)} consts={len(after.constants)} qty={len(after.quantities)}"
+                        f"vars={len(after.V['symbolic'].get('variables') or [])} consts={len(after.V['symbolic'].get('constants') or [])} qty={len(after.V['symbolic'].get('quantities') or [])}"
                     )
                 if step_name == "relations":
-                    head = _trunc(after.relations[0]) if after.relations else ""
-                    return f"count={len(after.relations)} head='{head}'"
+                    head = _trunc(after.C["symbolic"][0]) if after.C["symbolic"] else ""
+                    return f"count={len(after.C["symbolic"])} head='{head}'"
                 if step_name == "goal":
                     return f"goal='{_trunc(after.goal)}'"
                 if step_name == "classify":
@@ -160,8 +164,9 @@ class MicroRunner:
                 if step_name == "repr":
                     targ = None
                     try:
-                        if isinstance(after.canonical_repr, dict):
-                            targ = after.canonical_repr.get("target")
+                        cr = after.R["symbolic"].get("canonical_repr")
+                        if isinstance(cr, dict):
+                            targ = cr.get("target")
                     except Exception:
                         targ = None
                     return f"target='{_trunc(targ)}'"
@@ -181,25 +186,25 @@ class MicroRunner:
                             pass
                     return f"plan_steps={len(steps)}: {_trunc(', '.join(acts))}"
                 if step_name == "execute_plan":
-                    base = f"relations={len(after.relations)}"
+                    base = f"relations={len(after.C['symbolic'])}"
                     tail = ""
                     try:
-                        tail += f" dof={after.degrees_of_freedom}"
+                        tail += f" dof={after.M.get('degrees_of_freedom')}"
                     except Exception:
                         pass
                     try:
-                        tail += f" score={after.progress_score}"
+                        tail += f" score={after.M.get('progress_score')}"
                     except Exception:
                         pass
                     return base + tail
                 if step_name == "extract_candidate":
-                    cand = after.candidate_answers[-1] if after.candidate_answers else None
+                    cand = after.A["symbolic"]["candidates"][-1] if after.A["symbolic"]["candidates"] else None
                     return f"candidate='{_trunc(cand)}'"
                 if step_name == "simplify_candidate_sympy":
-                    cand = after.candidate_answers[-1] if after.candidate_answers else None
+                    cand = after.A["symbolic"]["candidates"][-1] if after.A["symbolic"]["candidates"] else None
                     return f"simplified='{_trunc(cand)}'"
                 if step_name in {"verify_sympy", "verify"}:
-                    return f"final='{_trunc(after.final_answer)}'"
+                    return f"final='{_trunc(after.A["symbolic"].get("final"))}'"
             except Exception:
                 return ""
             return ""
@@ -281,16 +286,16 @@ class MicroRunner:
                 before.qa_feedback = reason
                 state = before
             # Early exit if final solution is available
-            if state.final_answer is not None:
+            if state.A["symbolic"].get("final") is not None:
                 break
-        if state.final_answer is not None:
-            self.logger.info("[micro-solver] final solution: %s", state.final_answer)
+        if state.A["symbolic"].get("final") is not None:
+            self.logger.info("[micro-solver] final solution: %s", state.A["symbolic"].get("final"))
         else:
             # Provide a more informative summary instead of a bare "(none)"
             # 1) If we have candidates, surface the last one as an unverified fallback
             fallback_msg = None
             try:
-                last_cand = state.candidate_answers[-1] if state.candidate_answers else None
+                last_cand = state.A["symbolic"]["candidates"][-1] if state.A["symbolic"]["candidates"] else None
             except Exception:
                 last_cand = None
             if last_cand is not None:
@@ -298,7 +303,7 @@ class MicroRunner:
             else:
                 # 2) Otherwise, show a short hint from the final relations
                 try:
-                    head_rel = state.relations[-1] if state.relations else None
+                    head_rel = state.C["symbolic"][-1] if state.C["symbolic"] else None
                 except Exception:
                     head_rel = None
                 if head_rel:
@@ -308,8 +313,8 @@ class MicroRunner:
 
             # Attach to state for downstream consumers
             try:
-                state.final_explanation = (
-                    state.final_explanation
+                state.A["symbolic"]["explanation"] = (
+                    state.A["symbolic"].get("explanation")
                     or f"No final answer computed; {fallback_msg}."
                 )
             except Exception:
@@ -317,7 +322,7 @@ class MicroRunner:
 
             self.logger.info("[micro-solver] final solution: %s", fallback_msg)
         try:
-            state.certificate = build_certificate(state)
+            state.A["symbolic"]["certificate"] = build_certificate(state)
         except Exception:
             pass
         return state

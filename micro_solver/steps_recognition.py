@@ -20,7 +20,7 @@ def _micro_normalize(state: MicroState) -> MicroState:
 def _micro_tokenize(state: MicroState) -> MicroState:
     out, err = _invoke(
         A.TokenizerAgent,
-        state.normalized_text or state.problem_text,
+        state.R["symbolic"].get("normalized_text") or state.problem_text,
         qa_feedback=state.qa_feedback,
     )
     state.qa_feedback = None
@@ -92,9 +92,9 @@ def _micro_entities(state: MicroState) -> MicroState:
             if d.get("unit") is not None:
                 entry["unit"] = str(d.get("unit"))
             norm_q.append(entry)
-        state.quantities = norm_q
+        state.V["symbolic"]["quantities"] = norm_q
     except Exception:
-        state.quantities = []
+        state.V["symbolic"]["quantities"] = []
     # Deterministic augmentation: ensure numeric literals appear in constants/quantities
     try:
         import re as _re

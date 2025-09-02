@@ -15,14 +15,15 @@ from .sym_utils import parse_relation_sides, evaluate_with_env, evaluate_numeric
 
 def _total_residual_l2(state: MicroState) -> float:
     vals: list[float] = []
-    for rel in state.relations:
+    for rel in state.C["symbolic"]:
         op, lhs, rhs = parse_relation_sides(rel)
         if op != "=":
             continue
-        ok_l, val_l = evaluate_with_env(lhs, state.env)
+        env = state.V["symbolic"].get("env", {})
+        ok_l, val_l = evaluate_with_env(lhs, env)
         if not ok_l:
             ok_l, val_l = evaluate_numeric(lhs)
-        ok_r, val_r = evaluate_with_env(rhs, state.env)
+        ok_r, val_r = evaluate_with_env(rhs, env)
         if not ok_r:
             ok_r, val_r = evaluate_numeric(rhs)
         if ok_l and ok_r:
@@ -35,14 +36,15 @@ def _total_residual_l2(state: MicroState) -> float:
 
 def _count_satisfied_ineq(state: MicroState) -> int:
     count = 0
-    for rel in state.relations:
+    env = state.V["symbolic"].get("env", {})
+    for rel in state.C["symbolic"]:
         op, lhs, rhs = parse_relation_sides(rel)
         if op not in ("<", "<=", ">", ">="):
             continue
-        ok_l, val_l = evaluate_with_env(lhs, state.env)
+        ok_l, val_l = evaluate_with_env(lhs, env)
         if not ok_l:
             ok_l, val_l = evaluate_numeric(lhs)
-        ok_r, val_r = evaluate_with_env(rhs, state.env)
+        ok_r, val_r = evaluate_with_env(rhs, env)
         if not ok_r:
             ok_r, val_r = evaluate_numeric(rhs)
         if not (ok_l and ok_r):
@@ -97,7 +99,7 @@ def update_metrics(state: MicroState) -> MicroState:
     metrics["ineq_satisfied"] = float(ineq)
 
     prev_vol = metrics.get("bounds_volume")
-    vol = _bounds_volume(state.derived.get("bounds"))
+    vol = _bounds_volume(state.V["symbolic"].get("derived", {}).get("bounds"))
     metrics["bounds_volume"] = vol
     metrics["bounds_volume_reduction"] = (
         float(prev_vol - vol) if prev_vol is not None else 0.0
@@ -105,8 +107,8 @@ def update_metrics(state: MicroState) -> MicroState:
 
     state.M = metrics
 
-    state.progress_score = float(
-        -abs(state.degrees_of_freedom)
+    metrics["progress_score"] = float(
+        -abs(state.M.get("degrees_of_freedom", 0))
         + metrics.get("residual_l2_change", 0.0)
         + metrics.get("ineq_satisfied", 0.0)
         + metrics.get("bounds_volume_reduction", 0.0)
@@ -115,7 +117,7 @@ def update_metrics(state: MicroState) -> MicroState:
 
 
 def goal_satisfied(state: MicroState) -> bool:
-    return state.final_answer is not None
+    return state.A["symbolic"].get("final") is not None
 
 
 def select_operator(state: MicroState, operators: Sequence[Operator]) -> Operator | None:
@@ -154,12 +156,12 @@ def replan(state: MicroState) -> MicroState:
     # Rotate or branch case splits when available
     if state.case_splits:
         state.active_case = (state.active_case + 1) % len(state.case_splits)
-        state.relations = list(state.case_splits[state.active_case])
+        state.C["symbolic"] = list(state.case_splits[state.active_case])
     else:
         # Fallback: rotate relations to explore different forms
-        state.relations = list(reversed(state.relations))
+        state.C["symbolic"] = list(reversed(state.C["symbolic"]))
 
-    state.needs_replan = False
+    state.M["needs_replan"] = False
     return state
 
 
@@ -170,22 +172,22 @@ def solve(state: MicroState, operators: Sequence[Operator], *, max_iters: int = 
         state = update_metrics(state)
         if goal_satisfied(state):
             break
-        if state.needs_replan or state.stalls > 3:
+        if state.M.get("needs_replan") or state.M.get("stalls", 0) > 3:
             state = replan(state)
-            state.stalls = 0
+            state.M["stalls"] = 0
             continue
         op = select_operator(state, operators)
         if op is None:
             break
-        before = state.progress_score
+        before = state.M.get("progress_score", 0.0)
         state, _delta = op.apply(state)
         state = update_metrics(state)
-        if state.progress_score <= before:
-            state.stalls += 1
+        if state.M.get("progress_score", 0.0) <= before:
+            state.M["stalls"] = state.M.get("stalls", 0) + 1
         else:
-            state.stalls = 0
+            state.M["stalls"] = 0
     try:
-        state.certificate = build_certificate(state)
+        state.A["symbolic"]["certificate"] = build_certificate(state)
     except Exception:
         pass
     return state

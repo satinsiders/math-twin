@@ -12,12 +12,12 @@ class DummyOperator(Operator):
         return True
 
     def apply(self, state: MicroState) -> Tuple[MicroState, float]:
-        state.final_answer = 42
+        state.A["symbolic"]["final"] = 42
         return state, 1.0
 
 
 def test_scheduler_applies_operator_without_spurious_replan() -> None:
     state = MicroState()
-    state.variables = ["x"]  # ensures non-zero degrees of freedom
+    state.V["symbolic"]["variables"] = ["x"]  # ensures non-zero degrees of freedom
     result = solve(state, [DummyOperator()], max_iters=2)
-    assert result.final_answer == 42
+    assert result.A["symbolic"].get("final") == 42

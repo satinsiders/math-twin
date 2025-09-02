@@ -5,36 +5,36 @@ from micro_solver.operators import SolveOperator, VerifyOperator
 
 def test_solve_operator_gated_by_dof() -> None:
     state = MicroState()
-    state.variables = ["x"]
-    state.relations = ["x + 2 = 5"]
+    state.V["symbolic"]["variables"] = ["x"]
+    state.C["symbolic"] = ["x + 2 = 5"]
     result = solve(state, [SolveOperator(), VerifyOperator()], max_iters=4)
-    assert result.final_answer == "3"
+    assert result.A["symbolic"].get("final") == "3"
 
 
 def test_solve_operator_skipped_when_underdetermined() -> None:
     state = MicroState()
-    state.variables = ["x", "y"]
-    state.relations = ["x + y = 5"]
+    state.V["symbolic"]["variables"] = ["x", "y"]
+    state.C["symbolic"] = ["x + y = 5"]
     result = solve(state, [SolveOperator(), VerifyOperator()], max_iters=2)
-    assert result.final_answer is None
-    assert result.candidate_answers == []
+    assert result.A["symbolic"].get("final") is None
+    assert result.A["symbolic"]["candidates"] == []
 
 
 def test_solve_operator_respects_env_bindings() -> None:
     state = MicroState()
-    state.variables = ["x", "y"]
-    state.env = {"x": 1}
-    state.relations = ["x + y = 3"]
+    state.V["symbolic"]["variables"] = ["x", "y"]
+    state.V["symbolic"]["env"] = {"x": 1}
+    state.C["symbolic"] = ["x + y = 3"]
     result = solve(state, [SolveOperator(), VerifyOperator()], max_iters=4)
-    assert result.candidate_answers == ["2"]
-    assert result.final_answer == "2"
+    assert result.A["symbolic"]["candidates"] == ["2"]
+    assert result.A["symbolic"].get("final") == "2"
 
 
 def test_solve_operator_surfaces_bound_values() -> None:
     state = MicroState()
-    state.variables = ["x"]
-    state.env = {"x": 2}
-    state.relations = ["x = 2"]
+    state.V["symbolic"]["variables"] = ["x"]
+    state.V["symbolic"]["env"] = {"x": 2}
+    state.C["symbolic"] = ["x = 2"]
     result = solve(state, [SolveOperator(), VerifyOperator()], max_iters=4)
-    assert result.candidate_answers == ["2"]
-    assert result.final_answer == "2"
+    assert result.A["symbolic"]["candidates"] == ["2"]
+    assert result.A["symbolic"].get("final") == "2"
