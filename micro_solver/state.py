@@ -66,6 +66,7 @@ class MicroState:
         default_factory=lambda: {
             rep: {
                 "candidates": [],
+                "best": None,
                 "final": None,
                 "explanation": None,
                 "intermediate": [],
@@ -102,4 +103,3 @@ class MicroState:
     error: Optional[str] = None
     skip_qa: bool = False
     next_steps: Optional[List] = None
-

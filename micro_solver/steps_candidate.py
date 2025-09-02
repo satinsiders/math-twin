@@ -1,11 +1,20 @@
 from __future__ import annotations
 
-from typing import Any, Optional, cast
+from typing import Any, Optional
 
 from .state import MicroState
 from . import agents as A
 from .steps_util import _invoke
-from .sym_utils import simplify_expr, verify_candidate, evaluate_numeric, evaluate_with_env, rewrite_relations, solve_for, solve_any, parse_relation_sides
+from .sym_utils import (
+    simplify_expr,
+    verify_candidate,
+    evaluate_numeric,
+    evaluate_with_env,
+    solve_for,
+    solve_any,
+    parse_relation_sides,
+)
+from .certificate import _compute_residuals
 
 
 def _micro_extract_candidate(state: MicroState) -> MicroState:
@@ -63,7 +72,12 @@ def _micro_extract_candidate(state: MicroState) -> MicroState:
         if not ok_num:
             out, err = _invoke(
                 A.CandidateSynthesizerAgent,
-                {"relations": state.C["symbolic"], "goal": state.goal, "problem_type": state.problem_type, "plan_steps": state.plan_steps},
+                {
+                    "relations": state.C["symbolic"],
+                    "goal": state.goal,
+                    "problem_type": state.problem_type,
+                    "plan_steps": state.plan_steps,
+                },
                 qa_feedback=state.qa_feedback,
             )
             state.qa_feedback = None
@@ -81,7 +95,12 @@ def _micro_extract_candidate(state: MicroState) -> MicroState:
         if isinstance(val_num, (int, float)) and float(val_num) == 0.0:
             out, err = _invoke(
                 A.CandidateSynthesizerAgent,
-                {"relations": state.C["symbolic"], "goal": state.goal, "problem_type": state.problem_type, "plan_steps": state.plan_steps},
+                {
+                    "relations": state.C["symbolic"],
+                    "goal": state.goal,
+                    "problem_type": state.problem_type,
+                    "plan_steps": state.plan_steps,
+                },
                 qa_feedback=state.qa_feedback,
             )
             state.qa_feedback = None
@@ -163,13 +182,41 @@ def _infer_target_var(state: MicroState) -> Optional[str]:
     return None
 
 
+def _update_best_candidate(state: MicroState, cand: Any, *, var: Optional[str] = None) -> None:
+    try:
+        residuals = _compute_residuals(list(state.C["symbolic"]), cand, varname=var)
+        new_res = max(residuals.values()) if residuals else float("inf")
+    except Exception:
+        new_res = float("inf")
+
+    best = state.A["symbolic"].get("best")
+    if best is None:
+        best_res = float("inf")
+    else:
+        try:
+            best_residuals = _compute_residuals(list(state.C["symbolic"]), best, varname=var)
+            best_res = max(best_residuals.values()) if best_residuals else float("inf")
+        except Exception:
+            best_res = float("inf")
+
+    if best is None or new_res < best_res:
+        state.A["symbolic"]["best"] = cand
+
+
 def _micro_verify(state: MicroState) -> MicroState:
+    var = _infer_target_var(state)
     for cand in state.A["symbolic"]["candidates"]:
         out, err = _invoke(
             A.VerifyAgent,
-            {"relations": state.C["symbolic"], "candidate": cand, "goal": state.goal, "problem_type": state.problem_type},
+            {
+                "relations": state.C["symbolic"],
+                "candidate": cand,
+                "goal": state.goal,
+                "problem_type": state.problem_type,
+            },
             qa_feedback=state.qa_feedback,
         )
+        _update_best_candidate(state, cand, var=var)
         if err:
             continue
         if bool(out.get("ok", False)):
@@ -188,8 +235,11 @@ def _micro_verify_sympy(state: MicroState) -> MicroState:
         s = str(cand)
         if verify_candidate(state.C["symbolic"], s, varname=var):
             ok, val = evaluate_numeric(s)
-            state.A["symbolic"]["final"] = (val if ok else s)
+            cand_val = (val if ok else s)
+            state.A["symbolic"]["final"] = cand_val
+            _update_best_candidate(state, cand_val, var=var)
             return state
+        _update_best_candidate(state, cand, var=var)
     return _micro_verify(state)
 
 
