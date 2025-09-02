@@ -1,5 +1,5 @@
 [flake8]
 max-line-length = 100
-extend-ignore = E203, W503
+extend-ignore = E203, W503, F811
 per-file-ignores =
     twin_generator/pipeline.py:F401

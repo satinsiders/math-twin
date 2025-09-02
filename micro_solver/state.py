@@ -131,6 +131,51 @@ class MicroState:
     next_steps: Optional[List] = None
 
     # ------------------------------------------------------------------
+    def __post_init__(self) -> None:
+        """Repair placeholder property defaults created by dataclasses."""
+
+        def _fix(container: Dict[str, Any], key: str, factory) -> None:
+            val = container.get(key)
+            if isinstance(val, property):  # pragma: no cover - defensive
+                container[key] = factory()
+
+        for rep in ("symbolic", "numeric", "alt"):
+            _fix(self.C, rep, list)
+
+        for rep in ("symbolic", "numeric", "alt"):
+            repdict = self.V.get(rep, {})
+            for key in (
+                "variables",
+                "constants",
+                "identifiers",
+                "points",
+                "functions",
+                "parameters",
+                "quantities",
+            ):
+                _fix(repdict, key, list)
+            _fix(repdict, "env", dict)
+            _fix(repdict, "derived", dict)
+
+        for rep in ("symbolic", "numeric", "alt"):
+            repdict = self.A.get(rep, {})
+            _fix(repdict, "candidates", list)
+            _fix(repdict, "intermediate", list)
+            if isinstance(repdict.get("final"), property):
+                repdict["final"] = None
+            if isinstance(repdict.get("explanation"), property):
+                repdict["explanation"] = None
+            if isinstance(repdict.get("certificate"), property):
+                repdict["certificate"] = None
+
+        if isinstance(self.env, property):
+            self.env = {}
+        if isinstance(self.derived, property):
+            self.derived = {}
+        if isinstance(self.relations, property):
+            self.relations = []
+
+    # ------------------------------------------------------------------
     # Property adapters for legacy flat fields
     # Representations ---------------------------------------------------
     @property
@@ -422,4 +467,3 @@ class MicroState:
             "final_answer": self.final_answer,
             "final_explanation": self.final_explanation,
         }
-

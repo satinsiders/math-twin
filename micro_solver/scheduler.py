@@ -140,17 +140,27 @@ def select_operator(state: MicroState, operators: Sequence[Operator]) -> Operato
 def replan(state: MicroState) -> MicroState:
     """Extended replan heuristic switching representations and branches."""
 
-    # Representation swap
-    if len(state.representations) > 1:
+    # ------------------------------------------------------------------
+    # Representation swap among symbolic/alt/numeric views
+    reps = [r for r in ("symbolic", "alt", "numeric") if r in state.representations]
+    if reps:
         try:
-            idx = state.representations.index(state.representation)
-        except ValueError:
+            idx = reps.index(state.representation)
+        except ValueError:  # pragma: no cover - defensive
             idx = -1
-        state.representation = state.representations[(idx + 1) % len(state.representations)]
+        state.representation = reps[(idx + 1) % len(reps)]
 
-    # Reseed numeric solver initial conditions
+    # ------------------------------------------------------------------
+    # Coarsen / refine numeric grids and reseed local solvers
+    grid = state.V["numeric"]["derived"].get("grid")
+    if isinstance(grid, (int, float)):
+        grid = float(grid)
+        state.V["numeric"]["derived"]["grid"] = grid / 2.0 if grid >= 1.0 else grid * 2.0
+    else:
+        state.V["numeric"]["derived"]["grid"] = 1.0
     state.numeric_seed = random.random()
 
+    # ------------------------------------------------------------------
     # Rotate or branch case splits when available
     if state.case_splits:
         state.active_case = (state.active_case + 1) % len(state.case_splits)
@@ -158,6 +168,23 @@ def replan(state: MicroState) -> MicroState:
     else:
         # Fallback: rotate relations to explore different forms
         state.relations = list(reversed(state.relations))
+
+    # ------------------------------------------------------------------
+    # Decompose or rotate compound goals
+    pending = state.derived.get("pending_goals", [])
+    if pending:
+        pending.append(state.goal)
+        state.goal = pending.pop(0)
+        state.derived["pending_goals"] = pending
+    elif state.goal and " and " in state.goal:
+        parts = [p.strip() for p in state.goal.split(" and ") if p.strip()]
+        if state.goal.lower().startswith("find "):
+            for i in range(1, len(parts)):
+                if not parts[i].lower().startswith("find "):
+                    parts[i] = "find " + parts[i]
+        state.goal = parts[0]
+        if len(parts) > 1:
+            state.derived["pending_goals"] = parts[1:]
 
     state.needs_replan = False
     return state
