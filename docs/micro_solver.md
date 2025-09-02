@@ -6,7 +6,7 @@ Overview
 The micro‑solver implements a multi‑agent architecture that decomposes math problem solving into tiny, verifiable micro‑steps aligned with a cognitive breakdown:
 
 - Recognition: encode the problem into a structured internal representation.
-- Reasoning: plan by selecting schemas/strategies and sequencing atomic actions.
+- Reasoning: retrieve schemas/strategies and schedule operators based on progress.
 - Calculation: execute algebraic/arithmetical steps, verify, and format the result.
 
 Each micro‑step is handled by a single agent with a narrow responsibility, strict input/output contracts, and micro‑QA after every step. This minimizes per‑agent cognitive load and reduces cascading errors.
@@ -32,12 +32,10 @@ Stage → Micro‑Steps
 2) Reasoning
 - Schema Retrieve: `SchemaRetrieverAgent` → {schemas[]} (named canonical schemas).
 - Strategy Enumerate: `StrategyEnumeratorAgent` → {strategies[]} (micro‑plans).
-- Precondition Check: `PreconditionCheckerAgent` for each strategy → pick first ok.
-- Step Decompose: `StepDecomposerAgent` → {plan_steps:[{id, action, args}]}.
-- Next Action: `NextActionAgent` → {next_step} only; no whole‑plan execution in one agent.
+- Progress Scheduler: `scheduler.solve_with_defaults` applies operators based on progress signals.
 
 3) Calculation
-- Execute Plan (iterative): `_micro_execute_plan` loops `next_action → rewrite` with micro‑QA after each rewrite, up to a safety budget.
+- Execute Plan: handled by the progress scheduler above.
 - (Optional) Substitute / Simplify: `SubstituteAgent`, `SimplifyAgent` for isolated, non‑global rewrites.
 - Candidate Extract: detect candidate answer by pattern (e.g., x = expr).
 - SymPy Simplify: `_micro_simplify_candidate_sympy` uses SymPy to canonicalize the candidate expression deterministically.
@@ -71,7 +69,7 @@ CLI
 Options:
 - `--verbose`: enables structured logs, including step names and per-step QA results.
 
-- Iteration: The default graph includes `_micro_execute_plan`, which repeatedly calls `NextActionAgent` to pick the next atomic step and `RewriteAgent` to apply it, with micro‑QA after each rewrite, until the decomposed plan is exhausted (no hard iteration cap). A minimal no‑progress detector guards against infinite loops.
+- Iteration: `scheduler.solve_with_defaults` iteratively applies operators guided by progress metrics; a stall counter guards against infinite loops.
 - SymPy integration: `micro_solver/sym_utils.py` provides `simplify_expr` and `verify_candidate`. These helpers are defensive and degrade gracefully if SymPy is not available.
 
 Plan Lint (Policy Tester)
