@@ -113,7 +113,27 @@ class FeasibleSampleOperator(Operator):
     def apply(self, state: MicroState) -> Tuple[MicroState, float]:
         import random
 
-        sample = {v: random.random() for v in state.variables}
+        sample: dict[str, float] = {}
+        for v in state.variables:
+            low, high = state.domain.get(v, (None, None))
+            tags = state.qual.get(v, set())
+            # Apply qualitative sign hints
+            if "positive" in tags:
+                low = max(low or 0.0, 0.0)
+            if "nonnegative" in tags:
+                low = max(low or 0.0, 0.0)
+            if "negative" in tags:
+                high = min(high or 0.0, 0.0)
+            if "nonpositive" in tags:
+                high = min(high or 0.0, 0.0)
+            # Default bounds when unspecified
+            if low is None:
+                low = -1.0
+            if high is None:
+                high = 1.0
+            if low >= high:
+                high = low + 1.0
+            sample[v] = random.uniform(low, high)
         state.derived["sample"] = sample
         return state, 0.0
 
@@ -289,7 +309,7 @@ class BoundInferOperator(Operator):
     def apply(self, state: MicroState) -> Tuple[MicroState, float]:
         try:
             import sympy as sp
-            bounds = dict(state.derived.get("bounds", {}))
+            bounds = dict(state.domain)
             changes = 0
             for r in state.relations:
                 op, lhs, rhs = parse_relation_sides(r)
@@ -312,10 +332,55 @@ class BoundInferOperator(Operator):
                         changes += 1
                 bounds[key] = (low, high)
             if changes:
+                state.domain = bounds
+                # keep in derived for backward compatibility with older agents
                 state.derived["bounds"] = bounds
             return state, float(changes)
         except Exception:
             return state, 0.0
+
+
+@dataclass
+class DomainPruneOperator(Operator):
+    """Remove sampled values that violate known bounds or qualitative tags.
+
+    Progress signal: number of sample entries removed."""
+
+    name: str = "domain_prune"
+
+    def applicable(self, state: MicroState) -> bool:  # pragma: no cover - trivial
+        sample = state.derived.get("sample")
+        return isinstance(sample, dict) and bool(sample)
+
+    def apply(self, state: MicroState) -> Tuple[MicroState, float]:
+        sample = dict(state.derived.get("sample", {}))
+        removed = 0
+        for k, v in list(sample.items()):
+            low, high = state.domain.get(k, (None, None))
+            tags = state.qual.get(k, set())
+            if (low is not None and v < low) or (high is not None and v > high):
+                sample.pop(k)
+                removed += 1
+                continue
+            if "positive" in tags and v <= 0:
+                sample.pop(k)
+                removed += 1
+                continue
+            if "nonnegative" in tags and v < 0:
+                sample.pop(k)
+                removed += 1
+                continue
+            if "negative" in tags and v >= 0:
+                sample.pop(k)
+                removed += 1
+                continue
+            if "nonpositive" in tags and v > 0:
+                sample.pop(k)
+                removed += 1
+                continue
+        if removed:
+            state.derived["sample"] = sample
+        return state, float(removed)
 
 
 @dataclass
@@ -441,6 +506,7 @@ DEFAULT_OPERATORS: list[Operator] = [
     TransformOperator(),
     CaseSplitOperator(),
     BoundInferOperator(),
+    DomainPruneOperator(),
     NumericSolveOperator(),
     GridRefineOperator(),
     QuadratureOperator(),
