@@ -95,8 +95,24 @@ def mark_redundant_constraints(
     """
     try:
         import sympy as sp
+        from .sym_utils import parse_relation_sides, _parse_expr
     except Exception:
         return []
+
+    # Track indices of relations that actually contributed rows to the Jacobian
+    eq_indices: list[int] = []
+    for idx, r in enumerate(relations):
+        try:
+            op, lhs, rhs = parse_relation_sides(r)
+            if op != "=":
+                continue
+            # ``numeric_jacobian`` only includes relations where parsing succeeds,
+            # so we mirror that behaviour here when collecting indices.
+            _parse_expr(lhs)
+            _parse_expr(rhs)
+            eq_indices.append(idx)
+        except Exception:
+            continue
 
     J = numeric_jacobian(relations, variables, env)
     if J is None or J.rows == 0:
@@ -104,7 +120,7 @@ def mark_redundant_constraints(
     try:
         _, pivots = J.T.rref()  # pivot columns of transpose = independent rows
         independent = set(pivots)
-        return [i for i in range(J.rows) if i not in independent]
+        return [eq_indices[i] for i in range(J.rows) if i not in independent]
     except Exception:
         return []
 
