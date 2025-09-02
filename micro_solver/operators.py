@@ -73,12 +73,12 @@ class SimplifyOperator(Operator):
     name: str = "simplify"
 
     def applicable(self, state: MicroState) -> bool:  # pragma: no cover - trivial
-        return bool(state.relations)
+        return bool(state.C["symbolic"])
 
     def apply(self, state: MicroState) -> Tuple[MicroState, float]:
-        before = sum(len(r) for r in state.relations)
-        state.relations = [simplify_expr(r) for r in state.relations]
-        after = sum(len(r) for r in state.relations)
+        before = sum(len(r) for r in state.C["symbolic"])
+        state.C["symbolic"] = [simplify_expr(r) for r in state.C["symbolic"]]
+        after = sum(len(r) for r in state.C["symbolic"])
         delta = float(before - after)
         return state, delta
 
@@ -91,13 +91,13 @@ class SubstituteOperator(Operator):
     name: str = "substitute"
 
     def applicable(self, state: MicroState) -> bool:  # pragma: no cover - trivial
-        return bool(self.replacements) and bool(state.relations)
+        return bool(self.replacements) and bool(state.C["symbolic"])
 
     def apply(self, state: MicroState) -> Tuple[MicroState, float]:
         step = {"action": "substitute", "args": {"replacements": self.replacements}}
-        new_rel = rewrite_relations(state.relations, step)
-        delta = float(len(state.relations) - len(new_rel))
-        state.relations = new_rel
+        new_rel = rewrite_relations(state.C["symbolic"], step)
+        delta = float(len(state.C["symbolic"]) - len(new_rel))
+        state.C["symbolic"] = new_rel
         return state, delta
 
 
@@ -108,7 +108,7 @@ class FeasibleSampleOperator(Operator):
     name: str = "feasible_sample"
 
     def applicable(self, state: MicroState) -> bool:  # pragma: no cover - trivial
-        return bool(state.variables)
+        return bool(state.V["symbolic"]["variables"])
 
     def apply(self, state: MicroState) -> Tuple[MicroState, float]:
         import random
@@ -147,30 +147,30 @@ class SolveOperator(Operator):
     def applicable(self, state: MicroState) -> bool:  # pragma: no cover - trivial
         return (
             state.degrees_of_freedom == 0
-            and bool(state.relations)
-            and not state.candidate_answers
+            and bool(state.C["symbolic"])
+            and not state.A["symbolic"]["candidates"]
         )
 
     def apply(self, state: MicroState) -> Tuple[MicroState, float]:
         # Pick the first variable that is not yet bound in the environment.
         # When all variables are bound already, fall back to the first variable
         # so that its value can still be surfaced as a candidate answer.
-        target = next((v for v in state.variables if v not in state.env), None)
-        if target is None and state.variables:
-            target = state.variables[0]
+        target = next((v for v in state.V["symbolic"]["variables"] if v not in state.V["symbolic"]["env"]), None)
+        if target is None and state.V["symbolic"]["variables"]:
+            target = state.V["symbolic"]["variables"][0]
 
         # Substitute known bindings into the relations before solving
-        rels = _apply_env(state.relations, state.env)
+        rels = _apply_env(state.C["symbolic"], state.V["symbolic"]["env"])
 
         sols: list[Any]
-        if target in state.env:
-            sols = [str(state.env[target])]
+        if target in state.V["symbolic"]["env"]:
+            sols = [str(state.V["symbolic"]["env"][target])]
         else:
             sols = solve_for(rels, target) if target else []
             if not sols:
                 sols = solve_any(rels)
         if sols:
-            state.candidate_answers.extend(sols)
+            state.A["symbolic"]["candidates"].extend(sols)
             return state, 1.0
         return state, 0.0
 
@@ -184,24 +184,24 @@ class VerifyOperator(Operator):
     def applicable(self, state: MicroState) -> bool:  # pragma: no cover - trivial
         return (
             state.degrees_of_freedom == 0
-            and bool(state.candidate_answers)
-            and state.final_answer is None
+            and bool(state.A["symbolic"]["candidates"])
+            and state.A["symbolic"]["final"] is None
         )
 
     def apply(self, state: MicroState) -> Tuple[MicroState, float]:
         try:
-            candidate = str(state.candidate_answers[-1])
+            candidate = str(state.A["symbolic"]["candidates"][-1])
         except Exception:
             return state, 0.0
 
         # Choose the variable corresponding to the candidate: first unbound symbol
-        var = next((v for v in state.variables if v not in state.env), None)
+        var = next((v for v in state.V["symbolic"]["variables"] if v not in state.V["symbolic"]["env"]), None)
 
         # Substitute known bindings into the relations before verification
-        rels = _apply_env(state.relations, state.env)
+        rels = _apply_env(state.C["symbolic"], state.V["symbolic"]["env"])
 
         if verify_candidate(rels, candidate, varname=var):
-            state.final_answer = candidate
+            state.A["symbolic"]["final"] = candidate
             return state, 1.0
         return state, 0.0
 
@@ -216,20 +216,20 @@ class EliminateOperator(Operator):
     name: str = "eliminate"
 
     def applicable(self, state: MicroState) -> bool:  # pragma: no cover - trivial
-        return len(state.variables) > 1 and bool(state.relations)
+        return len(state.V["symbolic"]["variables"]) > 1 and bool(state.C["symbolic"])
 
     def apply(self, state: MicroState) -> Tuple[MicroState, float]:
-        target = state.variables[-1]
-        before = sum(r.count(target) for r in state.relations)
+        target = state.V["symbolic"]["variables"][-1]
+        before = sum(r.count(target) for r in state.C["symbolic"])
         new_rel = rewrite_relations(
-            state.relations,
+            state.C["symbolic"],
             {"action": "eliminate_symbol", "args": {"symbol": target}},
         )
         after = sum(r.count(target) for r in new_rel)
         delta = float(before - after)
         if delta > 0:
-            state.relations = new_rel
-            state.variables = [v for v in state.variables if v != target]
+            state.C["symbolic"] = new_rel
+            state.V["symbolic"]["variables"] = [v for v in state.V["symbolic"]["variables"] if v != target]
         return state, delta
 
 
@@ -244,13 +244,13 @@ class TransformOperator(Operator):
     name: str = "transform"
 
     def applicable(self, state: MicroState) -> bool:  # pragma: no cover - trivial
-        return bool(state.relations)
+        return bool(state.C["symbolic"])
 
     def apply(self, state: MicroState) -> Tuple[MicroState, float]:
-        before = sum(len(r) for r in state.relations)
-        new_rel = rewrite_relations(state.relations, {"action": self.action})
+        before = sum(len(r) for r in state.C["symbolic"])
+        new_rel = rewrite_relations(state.C["symbolic"], {"action": self.action})
         after = sum(len(r) for r in new_rel)
-        state.relations = new_rel
+        state.C["symbolic"] = new_rel
         return state, float(before - after)
 
 
@@ -263,7 +263,7 @@ class CaseSplitOperator(Operator):
     name: str = "case_split"
 
     def applicable(self, state: MicroState) -> bool:  # pragma: no cover - trivial
-        return bool(state.relations)
+        return bool(state.C["symbolic"])
 
     def apply(self, state: MicroState) -> Tuple[MicroState, float]:
         try:
@@ -275,7 +275,7 @@ class CaseSplitOperator(Operator):
             )
             trans = (*standard_transformations, implicit_multiplication_application)
             cases: list[str] = []
-            for r in state.relations:
+            for r in state.C["symbolic"]:
                 op, lhs, rhs = parse_relation_sides(r)
                 if op != "=":
                     continue
@@ -288,7 +288,7 @@ class CaseSplitOperator(Operator):
                     cases.append(f"{sp.sstr(sym)} = {sp.sstr(-root)}")
                     break
             if cases:
-                state.derived["cases"] = cases
+                state.V["symbolic"]["derived"]["cases"] = cases
                 return state, float(len(cases))
         except Exception:
             pass
@@ -304,14 +304,14 @@ class BoundInferOperator(Operator):
     name: str = "bound_infer"
 
     def applicable(self, state: MicroState) -> bool:  # pragma: no cover - trivial
-        return bool(state.relations)
+        return bool(state.C["symbolic"])
 
     def apply(self, state: MicroState) -> Tuple[MicroState, float]:
         try:
             import sympy as sp
             bounds = dict(state.domain)
             changes = 0
-            for r in state.relations:
+            for r in state.C["symbolic"]:
                 op, lhs, rhs = parse_relation_sides(r)
                 if op not in ("<", "<=", ">", ">="):
                     continue
@@ -392,18 +392,18 @@ class NumericSolveOperator(Operator):
     name: str = "numeric_solve"
 
     def applicable(self, state: MicroState) -> bool:  # pragma: no cover - trivial
-        return bool(state.relations) and not state.candidate_answers
+        return bool(state.C["symbolic"]) and not state.A["symbolic"]["candidates"]
 
     def apply(self, state: MicroState) -> Tuple[MicroState, float]:
-        for r in state.relations:
+        for r in state.C["symbolic"]:
             op, lhs, rhs = parse_relation_sides(r)
             if op != "=":
                 continue
-            ok, val = evaluate_with_env(rhs, state.env)
+            ok, val = evaluate_with_env(rhs, state.V["symbolic"]["env"])
             if not ok:
                 ok, val = evaluate_numeric(rhs)
             if ok:
-                state.candidate_answers.append(str(val))
+                state.A["symbolic"]["candidates"].append(str(val))
                 return state, 1.0
         return state, 0.0
 
@@ -417,11 +417,11 @@ class GridRefineOperator(Operator):
     name: str = "grid_refine"
 
     def applicable(self, state: MicroState) -> bool:  # pragma: no cover - trivial
-        sample = state.derived.get("sample")
+        sample = state.V["symbolic"]["derived"].get("sample")
         return isinstance(sample, dict) and bool(sample)
 
     def apply(self, state: MicroState) -> Tuple[MicroState, float]:
-        sample = dict(state.derived.get("sample", {}))
+        sample = dict(state.V["symbolic"]["derived"].get("sample", {}))
         changes = 0
         for k, v in sample.items():
             try:
@@ -432,7 +432,7 @@ class GridRefineOperator(Operator):
             except Exception:
                 continue
         if changes:
-            state.derived["sample"] = sample
+            state.V["symbolic"]["derived"]["sample"] = sample
         return state, float(changes)
 
 
@@ -440,23 +440,23 @@ class GridRefineOperator(Operator):
 class QuadratureOperator(Operator):
     """Compute a definite integral stored in ``derived``.
 
-    Expects ``state.derived['integrand']`` (expression in ``x``) and
-    ``state.derived['interval']`` as ``(a, b)``.
+    Expects ``state.V["symbolic"]["derived"]['integrand']`` (expression in ``x``) and
+    ``state.V["symbolic"]["derived"]['interval']`` as ``(a, b)``.
     Progress signal: 1.0 when integral value is produced."""
 
     name: str = "quadrature"
 
     def applicable(self, state: MicroState) -> bool:  # pragma: no cover - trivial
-        return "integrand" in state.derived and "interval" in state.derived
+        return "integrand" in state.V["symbolic"]["derived"] and "interval" in state.V["symbolic"]["derived"]
 
     def apply(self, state: MicroState) -> Tuple[MicroState, float]:
         try:
             import sympy as sp
             x = sp.Symbol("x")
-            f_expr = sp.sympify(str(state.derived.get("integrand")))
-            a, b = state.derived.get("interval")
+            f_expr = sp.sympify(str(state.V["symbolic"]["derived"].get("integrand")))
+            a, b = state.V["symbolic"]["derived"].get("interval")
             val = float(sp.integrate(f_expr, (x, a, b)))
-            state.derived["integral"] = val
+            state.V["symbolic"]["derived"]["integral"] = val
             return state, 1.0
         except Exception:
             return state, 0.0
@@ -471,14 +471,14 @@ class RationalizeOperator(Operator):
     name: str = "rationalize"
 
     def applicable(self, state: MicroState) -> bool:  # pragma: no cover - trivial
-        return any("." in str(a) for a in state.candidate_answers)
+        return any("." in str(a) for a in state.A["symbolic"]["candidates"])
 
     def apply(self, state: MicroState) -> Tuple[MicroState, float]:
         try:
             import sympy as sp
             new_answers = []
             changes = 0
-            for a in state.candidate_answers:
+            for a in state.A["symbolic"]["candidates"]:
                 try:
                     r = sp.Rational(str(a)).limit_denominator()
                     if str(r) != str(a):
@@ -487,7 +487,7 @@ class RationalizeOperator(Operator):
                 except Exception:
                     new_answers.append(str(a))
             if changes:
-                state.candidate_answers = new_answers
+                state.A["symbolic"]["candidates"] = new_answers
             return state, float(changes)
         except Exception:
             return state, 0.0

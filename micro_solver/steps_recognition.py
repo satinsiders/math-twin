@@ -10,7 +10,7 @@ from .steps_util import _invoke
 def _micro_normalize(state: MicroState) -> MicroState:
     try:
         s = (state.problem_text or "").replace("\u2212", "-")
-        state.normalized_text = s.strip()
+        state.R["symbolic"]["normalized_text"] = s.strip()
         state.skip_qa = True
     except Exception as exc:
         state.error = f"normalize-failed:{exc}"
@@ -28,27 +28,22 @@ def _micro_tokenize(state: MicroState) -> MicroState:
         state.error = f"TokenizerAgent:{err}"
         return state
     try:
-        state.sentences = list(map(str, out.get("sentences", [])))
+        state.R["symbolic"]["sentences"] = list(map(str, out.get("sentences", [])))
         tps = out.get("tokens_per_sentence")
         tok = out.get("tokens")
-
+        sentences = state.R["symbolic"].get("sentences", [])
         tokens_per_sentence: list[list[str]] = []
         if isinstance(tps, list) and all(isinstance(row, list) for row in tps):
             tokens_per_sentence = [[str(x) for x in row] for row in tps]
         elif isinstance(tok, list) and tok and all(isinstance(row, list) for row in tok):
-            # Some models may put nested lists under 'tokens'
             tokens_per_sentence = [[str(x) for x in row] for row in tok]
-        elif isinstance(tok, list) and tok and len(state.sentences) == 1:
-            # Flat token list with a single sentence
+        elif isinstance(tok, list) and tok and len(sentences) == 1:
             tokens_per_sentence = [[str(x) for x in tok]]
-
-        # If tokens_per_sentence missing or mismatched, fall back to simple whitespace split
-        if not tokens_per_sentence or len(tokens_per_sentence) != len(state.sentences):
-            tokens_per_sentence = [[str(x) for x in s.split()] for s in state.sentences]
-
+        if not tokens_per_sentence or len(tokens_per_sentence) != len(sentences):
+            tokens_per_sentence = [[str(x) for x in s.split()] for s in sentences]
         flat_tokens: list[str] = [tok for row in tokens_per_sentence for tok in row]
-        state.tokens_per_sentence = tokens_per_sentence
-        state.tokens = flat_tokens
+        state.R["symbolic"]["tokens_per_sentence"] = tokens_per_sentence
+        state.R["symbolic"]["tokens"] = flat_tokens
     except Exception as exc:
         state.error = f"tokenize-parse:{exc}"
     return state
@@ -56,18 +51,23 @@ def _micro_tokenize(state: MicroState) -> MicroState:
 
 def _micro_entities(state: MicroState) -> MicroState:
     # Provide raw text to the agent for context alongside tokens/sentences
-    payload: dict[str, Any] = {"sentences": state.sentences, "tokens": state.tokens, "text": state.problem_text}
+    payload: dict[str, Any] = {
+        "sentences": state.R["symbolic"].get("sentences", []),
+        "tokens": state.R["symbolic"].get("tokens", []),
+        "text": state.problem_text,
+    }
     out, err = _invoke(A.EntityExtractorAgent, payload, qa_feedback=state.qa_feedback)
     state.qa_feedback = None
     if err:
         state.error = f"EntityExtractorAgent:{err}"
         return state
-    state.variables = [str(x) for x in out.get("variables", [])]
-    state.constants = [str(x) for x in out.get("constants", [])]
-    state.identifiers = [str(x) for x in out.get("identifiers", [])]
-    state.points = [str(x) for x in out.get("points", [])]
-    state.functions = [str(x) for x in out.get("functions", [])]
-    state.parameters = [str(x) for x in out.get("parameters", [])]
+    vs = state.V["symbolic"]
+    vs["variables"] = [str(x) for x in out.get("variables", [])]
+    vs["constants"] = [str(x) for x in out.get("constants", [])]
+    vs["identifiers"] = [str(x) for x in out.get("identifiers", [])]
+    vs["points"] = [str(x) for x in out.get("points", [])]
+    vs["functions"] = [str(x) for x in out.get("functions", [])]
+    vs["parameters"] = [str(x) for x in out.get("parameters", [])]
     q = out.get("quantities") or []
     # Coerce quantity values to numeric when possible; keep unit and sentence_idx
     try:
@@ -99,41 +99,46 @@ def _micro_entities(state: MicroState) -> MicroState:
     try:
         import re as _re
         numbers: set[str] = set()
-        for tok in state.tokens or []:
+        for tok in state.R["symbolic"].get("tokens", []) or []:
             for m in _re.finditer(r"-?\d+(?:\.\d+)?", str(tok)):
                 numbers.add(m.group(0))
-        if state.normalized_text:
-            for m in _re.finditer(r"-?\d+(?:\.\d+)?", str(state.normalized_text)):
+        norm_txt = state.R["symbolic"].get("normalized_text")
+        if norm_txt:
+            for m in _re.finditer(r"-?\d+(?:\.\d+)?", str(norm_txt)):
                 numbers.add(m.group(0))
         if numbers:
-            existing = set(map(str, state.constants or []))
+            existing = set(map(str, vs.get("constants", [])))
             for num in sorted(numbers, key=lambda s: (len(s), s)):
                 if num not in existing:
-                    state.constants.append(num)
-            present_vals = {str(d.get("value")) for d in (state.quantities or []) if isinstance(d, dict)}
+                    vs.setdefault("constants", []).append(num)
+            present_vals = {str(d.get("value")) for d in (vs.get("quantities", []) or []) if isinstance(d, dict)}
             for num in numbers:
                 if num not in present_vals:
-                    state.quantities.append({"value": num, "sentence_idx": 0})
+                    vs.setdefault("quantities", []).append({"value": num, "sentence_idx": 0})
     except Exception:
         pass
     return state
 
 
 def _micro_relations(state: MicroState) -> MicroState:
-    payload = {"sentences": state.sentences, "tokens": state.tokens, "text": state.problem_text}
+    payload = {
+        "sentences": state.R["symbolic"].get("sentences", []),
+        "tokens": state.R["symbolic"].get("tokens", []),
+        "text": state.problem_text,
+    }
     out, err = _invoke(A.RelationExtractorAgent, payload, qa_feedback=state.qa_feedback)
     state.qa_feedback = None
     if err:
         state.error = f"RelationExtractorAgent:{err}"
         return state
-    state.relations = [str(x) for x in out.get("relations", [])]
-    state.equations = list(state.relations)
+    rels = [str(x) for x in out.get("relations", [])]
+    state.C["symbolic"] = rels
     return state
 
 
 def _micro_goal(state: MicroState) -> MicroState:
     # Pass full problem text to improve goal inference when sentences are sparse/empty
-    payload = {"sentences": state.sentences, "text": state.problem_text}
+    payload = {"sentences": state.R["symbolic"].get("sentences", []), "text": state.problem_text}
     out, err = _invoke(
         A.GoalInterpreterAgent,
         payload,
@@ -150,7 +155,7 @@ def _micro_goal(state: MicroState) -> MicroState:
 def _micro_classify(state: MicroState) -> MicroState:
     out, err = _invoke(
         A.TypeClassifierAgent,
-        {"relations": state.relations, "goal": state.goal},
+        {"relations": state.C["symbolic"], "goal": state.goal},
         qa_feedback=state.qa_feedback,
     )
     state.qa_feedback = None
@@ -163,10 +168,10 @@ def _micro_classify(state: MicroState) -> MicroState:
 
 def _micro_repr(state: MicroState) -> MicroState:
     payload = {
-        "variables": state.variables,
-        "constants": state.constants,
-        "quantities": state.quantities,
-        "relations": state.relations,
+        "variables": state.V["symbolic"].get("variables", []),
+        "constants": state.V["symbolic"].get("constants", []),
+        "quantities": state.V["symbolic"].get("quantities", []),
+        "relations": state.C["symbolic"],
         "goal": state.goal,
         "problem_type": state.problem_type,
     }
@@ -176,5 +181,5 @@ def _micro_repr(state: MicroState) -> MicroState:
         state.error = f"RepresentationAgent:{err}"
         return state
     if isinstance(out, dict):
-        state.canonical_repr = out
+        state.R["symbolic"]["canonical_repr"] = out
     return state

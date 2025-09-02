@@ -19,11 +19,16 @@ def _micro_monitor_dof(state: MicroState) -> MicroState:
     of freedom.  The result is stored on the state for downstream heuristics.
     """
 
-    unknowns = [v for v in state.variables + state.parameters if v not in state.env]
-    eq_relations = [r for r in state.relations if "=" in r] + list(state.equations)
+    sym_vars = state.V["symbolic"].get("variables", [])
+    sym_params = state.V["symbolic"].get("parameters", [])
+    env = state.V["symbolic"].get("env", {})
+    unknowns = [v for v in sym_vars + sym_params if v not in env]
+    eq_relations = [r for r in state.C["symbolic"] if "=" in r]
     eq_count = len(eq_relations)
     ineq_count = sum(
-        1 for r in state.relations if any(op in r for op in ("<", ">", "≤", "≥")) and "=" not in r
+        1
+        for r in state.C["symbolic"]
+        if any(op in r for op in ("<", ">", "≤", "≥")) and "=" not in r
     )
 
     rank = estimate_jacobian_rank(eq_relations, unknowns)
