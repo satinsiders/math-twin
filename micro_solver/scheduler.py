@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import random
+from copy import deepcopy
 from typing import Sequence
 
 from .state import MicroState
@@ -125,6 +126,7 @@ def select_operator(state: MicroState, operators: Sequence[Operator]) -> Operato
 
     best_op: Operator | None = None
     best_score = float("-inf")
+    best_delta = float("-inf")
     for op in operators:
         try:
             if not op.applicable(state):
@@ -133,7 +135,17 @@ def select_operator(state: MicroState, operators: Sequence[Operator]) -> Operato
             score = float(score_fn(state)) if callable(score_fn) else 0.0
             if score > best_score:
                 best_score = score
+                state_copy = deepcopy(state)
+                _, delta = op.apply(state_copy)
+                best_delta = float(delta)
                 best_op = op
+            elif score == best_score:
+                state_copy = deepcopy(state)
+                _, delta = op.apply(state_copy)
+                delta = float(delta)
+                if best_delta <= 0 and delta > 0:
+                    best_delta = delta
+                    best_op = op
         except Exception:
             continue
     return best_op
