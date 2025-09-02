@@ -583,6 +583,7 @@ DEFAULT_OPERATORS: list[Operator] = [
     TransformOperator(),
     CaseSplitOperator(),
     BoundInferOperator(),
+    FeasibleSampleOperator(),
     DomainPruneOperator(),
     NumericSolveOperator(),
     GridRefineOperator(),

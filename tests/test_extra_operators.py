@@ -98,9 +98,12 @@ def test_feasible_sample_operator_respects_bounds() -> None:
 def test_domain_prune_operator_removes_invalid_samples() -> None:
     state = MicroState()
     state.V["symbolic"]["variables"] = ["x", "y"]
-    state.domain = {"x": (0.0, 1.0)}
-    state.qual = {"y": {"nonnegative"}}
-    state.V["symbolic"]["derived"]["sample"] = {"x": 2.0, "y": -1.0}
+    import random
+
+    random.seed(0)
+    state, _ = FeasibleSampleOperator().apply(state)
+    state.domain = {"x": (-1.0, 0.0)}
+    state.qual = {"y": {"nonpositive"}}
     state, delta = DomainPruneOperator().apply(state)
     assert "x" not in state.V["symbolic"]["derived"]["sample"]
     assert "y" not in state.V["symbolic"]["derived"]["sample"]
