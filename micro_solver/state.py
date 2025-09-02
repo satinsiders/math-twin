@@ -36,6 +36,15 @@ class MicroState:
     problem_type: Optional[str] = None  # e.g., "linear", "quadratic", "ratio", "geometry"...
     canonical_repr: Optional[dict[str, Any]] = None  # structured representation
 
+    # Representations and solver control
+    representations: list[str] = field(
+        default_factory=lambda: ["symbolic", "numeric"]
+    )
+    representation: str = "symbolic"
+    numeric_seed: float = 0.0
+    case_splits: list[list[str]] = field(default_factory=list)
+    active_case: int = 0
+
     # Reasoning artifacts (micro‑planned)
     schemas: list[str] = field(default_factory=list)  # matched known schemas by name
     strategies: list[str] = field(default_factory=list)

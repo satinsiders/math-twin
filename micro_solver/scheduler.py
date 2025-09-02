@@ -2,6 +2,7 @@ from __future__ import annotations
 
 """Progress‑driven operator scheduler for the micro‑solver rebuild."""
 
+import random
 from typing import Sequence
 
 from .state import MicroState
@@ -35,9 +36,27 @@ def select_operator(state: MicroState, operators: Sequence[Operator]) -> Operato
 
 
 def replan(state: MicroState) -> MicroState:
-    """Simple replan heuristic: rotate relations to explore different forms."""
+    """Extended replan heuristic switching representations and branches."""
 
-    state.relations = list(reversed(state.relations))
+    # Representation swap
+    if len(state.representations) > 1:
+        try:
+            idx = state.representations.index(state.representation)
+        except ValueError:
+            idx = -1
+        state.representation = state.representations[(idx + 1) % len(state.representations)]
+
+    # Reseed numeric solver initial conditions
+    state.numeric_seed = random.random()
+
+    # Rotate or branch case splits when available
+    if state.case_splits:
+        state.active_case = (state.active_case + 1) % len(state.case_splits)
+        state.relations = list(state.case_splits[state.active_case])
+    else:
+        # Fallback: rotate relations to explore different forms
+        state.relations = list(reversed(state.relations))
+
     state.needs_replan = False
     return state
 
@@ -74,4 +93,3 @@ def solve_with_defaults(state: MicroState, *, max_iters: int = 10) -> MicroState
     """Solve ``state`` using the built-in default operator pool."""
 
     return solve(state, DEFAULT_OPERATORS, max_iters=max_iters)
-
