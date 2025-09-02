@@ -21,6 +21,7 @@ from .operators import (
     SimplifyOperator,
     SubstituteOperator,
     FeasibleSampleOperator,
+    SolveOperator,
     VerifyOperator,
 )  # noqa: F401
 from .scheduler import solve  # noqa: F401
@@ -36,6 +37,7 @@ __all__ = [
     "SimplifyOperator",
     "SubstituteOperator",
     "FeasibleSampleOperator",
+    "SolveOperator",
     "VerifyOperator",
     "solve",
 ]
