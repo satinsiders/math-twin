@@ -5,10 +5,11 @@ from typing import Optional
 
 from .state import MicroState
 from .orchestrator import MicroGraph, MicroRunner
-from .steps import DEFAULT_MICRO_STEPS, build_steps
 
 
 def solve(problem_text: str, *, verbose: bool = False) -> MicroState:
+    from .steps import build_steps  # type: ignore
+
     steps = build_steps(max_iters=None)
     graph = MicroGraph(steps=steps)
     runner = MicroRunner(graph, verbose=verbose)
@@ -46,9 +47,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         print(out.A["symbolic"].get("final"))
         return 0
 
-    # Fallbacks when no final answer
-    if out.A["symbolic"]["candidates"]:
-        last = out.A["symbolic"]["candidates"][-1]
+    # Fallback when no final answer
+    if out.A["symbolic"].get("candidate") is not None:
+        last = out.A["symbolic"].get("candidate")
         if args.verbose:
             print(f"candidate-only (unverified): {last}")
         else:

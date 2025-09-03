@@ -18,7 +18,7 @@ from typing import Any, Callable
 from agents.run import Runner as AgentsRunner  # type: ignore
 
 from .state import MicroState
-from .agents import MicroQAAgent
+from .agents import MicroQAAgent  # type: ignore
 from .certificate import build_certificate
 from . import scheduler
 from .plan_policy import lint_plan as lint_plan_steps
@@ -68,7 +68,7 @@ class MicroRunner:
                     "env": after.V["symbolic"].get("env"),
                     "derived": after.V["symbolic"].get("derived"),
                     "intermediate": after.A["symbolic"].get("intermediate"),
-                    "candidate_answers": after.A["symbolic"].get("candidates"),
+                    "candidate_answer": after.A["symbolic"].get("candidate"),
                     "final_answer": after.A["symbolic"].get("final"),
                 },
                 "out": out_obj,
@@ -303,16 +303,9 @@ class MicroRunner:
             self.logger.info("[micro-solver] final solution: %s", state.A["symbolic"].get("final"))
         else:
             # Provide a more informative summary instead of a bare "(none)"
-            # 1) If we have candidates, surface the last one as an unverified fallback
+            # 1) If we have a candidate, surface it as an unverified fallback
             fallback_msg = None
-            try:
-                last_cand = (
-                    state.A["symbolic"]["candidates"][-1]
-                    if state.A["symbolic"]["candidates"]
-                    else None
-                )
-            except Exception:
-                last_cand = None
+            last_cand = state.A["symbolic"].get("candidate")
             if last_cand is not None:
                 fallback_msg = f"candidate-only (unverified): {last_cand}"
             else:

@@ -18,6 +18,7 @@ from . import steps as micro_steps  # noqa: F401
 from .candidate import Candidate  # noqa: F401
 from .operators import (
     Operator,
+    InitCandidatesOperator,
     SimplifyOperator,
     SubstituteOperator,
     FeasibleSampleOperator,
@@ -39,6 +40,7 @@ __all__ = [
     "micro_steps",
     "Candidate",
     "Operator",
+    "InitCandidatesOperator",
     "SimplifyOperator",
     "SubstituteOperator",
     "FeasibleSampleOperator",

@@ -12,6 +12,7 @@ from .operators import Operator, DEFAULT_OPERATORS
 from .steps_meta import _micro_monitor_dof
 from .certificate import build_certificate
 from .sym_utils import parse_relation_sides, evaluate_with_env, evaluate_numeric
+from .verification import verify_candidate_state
 
 
 def _total_residual_l2(state: MicroState) -> float:
@@ -140,15 +141,17 @@ def goal_satisfied(state: MicroState) -> bool:
 def init_candidates(state: MicroState) -> MicroState:
     """Seed obvious candidate answers from the environment or target."""
 
-    if state.A["symbolic"].get("candidates"):
+    if state.A["symbolic"].get("candidate") is not None:
         return state
     try:
         cr = state.R["symbolic"].get("canonical_repr")
         target = (cr or {}).get("target") if isinstance(cr, dict) else None
         if isinstance(target, str) and target.strip():
             ok, val = evaluate_with_env(target, state.V["symbolic"].get("env", {}))
+            if not ok:
+                ok, val = evaluate_numeric(target)
             if ok:
-                state.A["symbolic"]["candidates"].append(val)
+                state.add_candidate(val)
     except Exception:
         pass
     return state
@@ -212,7 +215,7 @@ def replan(state: MicroState) -> MicroState:
 
 def solve(state: MicroState, operators: Sequence[Operator], *, max_iters: int = 10) -> MicroState:
     """Iteratively apply operators chosen by progress signals."""
-
+    state.M.setdefault("verification_policy", "strict+epilogue")
     state = init_candidates(state)
     for _ in range(max_iters):
         state = update_metrics(state)
@@ -232,6 +235,12 @@ def solve(state: MicroState, operators: Sequence[Operator], *, max_iters: int = 
             state.M["stalls"] = state.M.get("stalls", 0) + 1
         else:
             state.M["stalls"] = 0
+    if (
+        state.A["symbolic"].get("final") is None
+        and state.A["symbolic"].get("candidate") is not None
+        and state.M.get("verification_policy") in {"opportunistic", "strict+epilogue"}
+    ):
+        verify_candidate_state(state, via="scheduler_epilogue")
     try:
         state.A["symbolic"]["certificate"] = build_certificate(state)
     except Exception:

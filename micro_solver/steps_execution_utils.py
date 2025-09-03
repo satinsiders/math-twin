@@ -34,7 +34,7 @@ def maybe_eval_target(state: MicroState) -> bool:
         if isinstance(target_expr, str) and target_expr.strip():
             ok, val = evaluate_with_env(target_expr, state.V["symbolic"]["env"] or {})
             if ok:
-                state.A["symbolic"]["candidates"].append(val)
+                state.add_candidate(val)
                 return True
     except Exception:
         pass

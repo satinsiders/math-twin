@@ -67,7 +67,9 @@ class MicroState:
             rep: {
                 "candidates": [],
                 "best": None,
+                "candidate": None,
                 "final": None,
+                "final_confidence": None,
                 "explanation": None,
                 "intermediate": [],
                 "certificate": None,
@@ -76,6 +78,8 @@ class MicroState:
         }
     )
     M: Dict[str, Any] = field(default_factory=dict)
+    E: Dict[str, Any] = field(default_factory=dict)
+    derived: Dict[str, Any] | None = None
 
     # ------------------------------------------------------------------
     # Solver control and reasoning artifacts (unchanged layout)
@@ -103,3 +107,13 @@ class MicroState:
     error: Optional[str] = None
     skip_qa: bool = False
     next_steps: Optional[List] = None
+
+    # ------------------------------------------------------------------
+    # Helpers
+    def add_candidate(self, value: Any, *, rep: str = "symbolic") -> None:
+        """Record ``value`` as the current candidate for representation ``rep``."""
+
+        sym = self.A.setdefault(rep, {})
+        sym.setdefault("candidates", [])
+        sym["candidates"].append(value)
+        sym["candidate"] = value

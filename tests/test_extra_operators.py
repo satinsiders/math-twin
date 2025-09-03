@@ -53,7 +53,7 @@ def test_numeric_solve_operator_evaluates_expression() -> None:
     state = MicroState()
     state.C["symbolic"] = ["x = 2 + 3"]
     state, delta = NumericSolveOperator().apply(state)
-    assert state.A["symbolic"]["candidates"] == ["5"]
+    assert state.A["symbolic"].get("candidate") == "5"
     assert delta == 1.0
 
 
@@ -76,7 +76,8 @@ def test_quadrature_operator_computes_integral() -> None:
 
 def test_rationalize_operator_converts_candidates() -> None:
     state = MicroState()
-    state.A["symbolic"]["candidates"] = ["0.5", "2"]
+    state.add_candidate("0.5")
+    state.add_candidate("2")
     state, delta = RationalizeOperator().apply(state)
     assert state.A["symbolic"]["candidates"] == ["1/2", "2"]
     assert delta == 1.0

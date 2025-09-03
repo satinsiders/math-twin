@@ -14,13 +14,13 @@ from .state import MicroState
 from .sym_utils import (
     rewrite_relations,
     simplify_expr,
-    verify_candidate,
     solve_for,
     solve_any,
     parse_relation_sides,
     evaluate_numeric,
     evaluate_with_env,
 )
+from .verification import verify_candidate_state
 
 
 def _apply_env(relations: list[str], env: dict[str, Any]) -> list[str]:
@@ -158,6 +158,30 @@ class FeasibleSampleOperator(Operator):
 
 
 @dataclass
+class InitCandidatesOperator(Operator):
+    """Seed trivial candidates from the environment or canonical target."""
+
+    name: str = "init_candidates"
+
+    def applicable(self, state: MicroState) -> bool:  # pragma: no cover - trivial
+        return state.A["symbolic"].get("candidate") is None
+
+    def apply(self, state: MicroState) -> Tuple[MicroState, float]:
+        try:
+            cr = state.R["symbolic"].get("canonical_repr")
+            target = (cr or {}).get("target") if isinstance(cr, dict) else None
+            if isinstance(target, str) and target.strip():
+                ok, val = evaluate_with_env(target, state.V["symbolic"].get("env", {}))
+                if not ok:
+                    ok, val = evaluate_numeric(target)
+                if ok:
+                    state.add_candidate(val)
+        except Exception:
+            pass
+        return state, 0.0
+
+
+@dataclass
 class SolveOperator(Operator):
     """Solve relations for a target symbol when system is determined."""
 
@@ -167,7 +191,7 @@ class SolveOperator(Operator):
         return (
             state.M.get("degrees_of_freedom", 0) == 0
             and bool(state.C["symbolic"])
-            and not state.A["symbolic"]["candidates"]
+            and state.A["symbolic"].get("candidate") is None
         )
 
     def apply(self, state: MicroState) -> Tuple[MicroState, float]:
@@ -196,7 +220,8 @@ class SolveOperator(Operator):
             if not sols:
                 sols = solve_any(rels)
         if sols:
-            state.A["symbolic"]["candidates"].extend(sols)
+            for s in sols:
+                state.add_candidate(str(s))
             return state, 1.0
         return state, 0.0
 
@@ -229,35 +254,21 @@ class VerifyOperator(Operator):
     name: str = "verify"
 
     def applicable(self, state: MicroState) -> bool:  # pragma: no cover - trivial
-        return (
-            state.M.get("degrees_of_freedom", 0) == 0
-            and bool(state.A["symbolic"]["candidates"])
-            and state.A["symbolic"]["final"] is None
-        )
+        if state.A["symbolic"].get("candidate") is None:
+            return False
+        if state.A["symbolic"].get("final") is not None:
+            return False
+        policy = state.M.get("verification_policy", "strict+epilogue")
+        if policy == "strict":
+            return state.M.get("degrees_of_freedom", 0) == 0
+        return True
 
     def apply(self, state: MicroState) -> Tuple[MicroState, float]:
-        try:
-            candidate = str(state.A["symbolic"]["candidates"][-1])
-        except Exception:
-            return state, 0.0
+        ok = verify_candidate_state(state, via="VerifyOperator")
+        return state, 1.0 if ok else 0.0
 
-        # Choose the variable corresponding to the candidate: first unbound symbol
-        var = next(
-            (
-                v
-                for v in state.V["symbolic"]["variables"]
-                if v not in state.V["symbolic"]["env"]
-            ),
-            None,
-        )
-
-        # Substitute known bindings into the relations before verification
-        rels = _apply_env(state.C["symbolic"], state.V["symbolic"]["env"])
-
-        if verify_candidate(rels, candidate, varname=var):
-            state.A["symbolic"]["final"] = candidate
-            return state, 1.0
-        return state, 0.0
+    def score(self, state: MicroState) -> float:
+        return 1.0
 
     def score(self, state: MicroState) -> float:
         try:
@@ -357,11 +368,11 @@ class DiffOperator(Operator):
     name: str = "diff"
 
     def applicable(self, state: MicroState) -> bool:  # pragma: no cover - trivial
-        deriv = state.derived
+        deriv = state.derived  # type: ignore[attr-defined]
         return isinstance(deriv, dict) and "expression" in deriv
 
     def apply(self, state: MicroState) -> Tuple[MicroState, float]:
-        deriv = state.derived
+        deriv = state.derived  # type: ignore[attr-defined]
         expr = deriv.get("expression") if isinstance(deriv, dict) else None
         if expr is None:
             return state, 0.0
@@ -373,15 +384,15 @@ class DiffOperator(Operator):
             expr_sym = sp.sympify(str(expr))
             deriv = sp.diff(expr_sym, sym)
             result = sp.sstr(deriv)
-            if isinstance(state.derived, dict):
-                state.derived["derivative"] = result
+            if isinstance(state.derived, dict):  # type: ignore[attr-defined]
+                state.derived["derivative"] = result  # type: ignore[attr-defined]
             delta = float(len(str(expr)) - len(result))
             return state, delta
         except Exception:
             return state, 0.0
 
     def score(self, state: MicroState) -> float:
-        deriv = state.derived
+        deriv = state.derived  # type: ignore[attr-defined]
         expr = deriv.get("expression") if isinstance(deriv, dict) else None
         if expr is None:
             return 0.0
@@ -428,15 +439,15 @@ class IntegrateOperator(Operator):
             expr_sym = sp.sympify(str(expr))
             integ = sp.integrate(expr_sym, sym)
             result = sp.sstr(integ)
-            if isinstance(state.derived, dict):
-                state.derived["integral"] = result
+            if isinstance(state.derived, dict):  # type: ignore[attr-defined]
+                state.derived["integral"] = result  # type: ignore[attr-defined]
             delta = float(len(str(expr)) - len(result))
             return state, delta
         except Exception:
             return state, 0.0
 
     def score(self, state: MicroState) -> float:
-        deriv = state.derived
+        deriv = state.derived  # type: ignore[attr-defined]
         expr = deriv.get("expression") if isinstance(deriv, dict) else None
         if expr is None:
             return 0.0
@@ -663,7 +674,7 @@ class NumericSolveOperator(Operator):
     name: str = "numeric_solve"
 
     def applicable(self, state: MicroState) -> bool:  # pragma: no cover - trivial
-        return bool(state.C["symbolic"]) and not state.A["symbolic"]["candidates"]
+        return bool(state.C["symbolic"]) and state.A["symbolic"].get("candidate") is None
 
     def apply(self, state: MicroState) -> Tuple[MicroState, float]:
         for r in state.C["symbolic"]:
@@ -674,7 +685,7 @@ class NumericSolveOperator(Operator):
             if not ok:
                 ok, val = evaluate_numeric(rhs)
             if ok:
-                state.A["symbolic"]["candidates"].append(str(val))
+                state.add_candidate(str(val))
                 return state, 1.0
         return state, 0.0
 
@@ -825,6 +836,7 @@ class RationalizeOperator(Operator):
 # mix of symbolic and validation steps while keeping the scheduling loop
 # lightweight.  Additional operators can be appended by callers as needed.
 DEFAULT_OPERATORS: list[Operator] = [
+    InitCandidatesOperator(),
     SolveOperator(),
     VerifyOperator(),
     SimplifyOperator(),

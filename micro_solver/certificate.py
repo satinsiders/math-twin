@@ -47,31 +47,17 @@ def _compute_residuals(
 def build_certificate(state: Any) -> Candidate:
     """Create a :class:`Candidate` summary for ``state``.
 
-    Uses ``state.A['symbolic']['best']`` when available, otherwise falls back to
-    ``state.A['symbolic']['final']`` or the last entry in
-    ``state.A['symbolic']['candidates']``.  The candidate always includes the
-    residuals against the original ``state.C['symbolic']`` and a ``verified``
-    flag indicating whether the candidate passed verification.
+    Uses ``state.A['symbolic']['final']`` when available, otherwise falls back to
+    ``state.A['symbolic']['candidate']``.  The candidate always includes the
+    residuals against the original ``state.C['symbolic']`` and a ``verified`` flag
+    indicating whether the candidate passed verification.
     """
 
-    cand_val = state.A["symbolic"].get("best")
-    verified = cand_val == state.A["symbolic"].get("final")
+    cand_val = state.A["symbolic"].get("final")
+    verified = cand_val is not None
     if cand_val is None:
-        cand_val = state.A["symbolic"].get("final")
-        verified = cand_val is not None
-    if cand_val is None:
-        try:
-            cand_val = state.A["symbolic"]["candidates"][-1]
-        except Exception:
-            cand_val = None
+        cand_val = state.A["symbolic"].get("candidate")
     residuals: Dict[str, float] = {}
     if cand_val is not None:
-        var = None
-        try:
-            from .steps_candidate import _infer_target_var  # type: ignore
-
-            var = _infer_target_var(state)
-        except Exception:
-            var = None
-        residuals = _compute_residuals(list(state.C["symbolic"]), cand_val, varname=var)
+        residuals = _compute_residuals(list(state.C["symbolic"]), cand_val, varname=None)
     return Candidate(value=cand_val, residuals=residuals, verified=verified)
