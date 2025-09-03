@@ -13,7 +13,9 @@ from .candidate import Candidate
 from .sym_utils import parse_relation_sides, _parse_expr  # type: ignore
 
 
-def _compute_residuals(relations: list[str], candidate: Any, *, varname: Optional[str] = None) -> Dict[str, float]:
+def _compute_residuals(
+    relations: list[str], candidate: Any, *, varname: Optional[str] = None
+) -> Dict[str, float]:
     """Return residuals for equality relations after substituting ``candidate``.
 
     Non-equality relations are ignored. Residuals are absolute numeric
@@ -45,14 +47,18 @@ def _compute_residuals(relations: list[str], candidate: Any, *, varname: Optiona
 def build_certificate(state: Any) -> Candidate:
     """Create a :class:`Candidate` summary for ``state``.
 
-    Uses ``state.A['symbolic']['final']`` when available, otherwise falls back to the last
-    entry in ``state.A['symbolic']['candidates']``.  The candidate always includes the
-    residuals against the original ``state.C['symbolic']`` and a ``verified`` flag
-    indicating whether the candidate passed verification.
+    Uses ``state.A['symbolic']['best']`` when available, otherwise falls back to
+    ``state.A['symbolic']['final']`` or the last entry in
+    ``state.A['symbolic']['candidates']``.  The candidate always includes the
+    residuals against the original ``state.C['symbolic']`` and a ``verified``
+    flag indicating whether the candidate passed verification.
     """
 
-    cand_val = state.A["symbolic"].get("final")
-    verified = cand_val is not None
+    cand_val = state.A["symbolic"].get("best")
+    verified = cand_val == state.A["symbolic"].get("final")
+    if cand_val is None:
+        cand_val = state.A["symbolic"].get("final")
+        verified = cand_val is not None
     if cand_val is None:
         try:
             cand_val = state.A["symbolic"]["candidates"][-1]
