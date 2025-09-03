@@ -71,6 +71,20 @@ def test_update_metrics_tracks_progress() -> None:
     assert state.M["bounds_volume_reduction"] == pytest.approx(2.0)
     assert state.M["progress_score"] > p1
 
+    assert state.M["sample_size"] == pytest.approx(0.0)
+
+    state.V["symbolic"]["derived"]["sample"] = {"x": 1.0, "y": 2.0}
+    state = update_metrics(state)
+    assert state.M["sample_size"] == pytest.approx(2.0)
+    assert state.M["sample_size_reduction"] == pytest.approx(-2.0)
+    p2 = state.M["progress_score"]
+
+    state.V["symbolic"]["derived"]["sample"].pop("y")
+    state = update_metrics(state)
+    assert state.M["sample_size"] == pytest.approx(1.0)
+    assert state.M["sample_size_reduction"] == pytest.approx(1.0)
+    assert state.M["progress_score"] > p2
+
 
 def test_select_operator_uses_metric_scores() -> None:
     state = MicroState()

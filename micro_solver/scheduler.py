@@ -113,6 +113,14 @@ def update_metrics(state: MicroState) -> MicroState:
         float(prev_vol - vol) if prev_vol is not None else 0.0
     )
 
+    prev_sample = metrics.get("sample_size")
+    sample = state.V["symbolic"].get("derived", {}).get("sample")
+    sample_size = float(len(sample)) if isinstance(sample, dict) else 0.0
+    metrics["sample_size"] = sample_size
+    metrics["sample_size_reduction"] = (
+        float(prev_sample - sample_size) if prev_sample is not None else 0.0
+    )
+
     state.M = metrics
 
     metrics["progress_score"] = float(
@@ -120,6 +128,7 @@ def update_metrics(state: MicroState) -> MicroState:
         + metrics.get("residual_l2_change", 0.0)
         + metrics.get("ineq_satisfied", 0.0)
         + metrics.get("bounds_volume_reduction", 0.0)
+        + metrics.get("sample_size_reduction", 0.0)
     )
     return state
 
