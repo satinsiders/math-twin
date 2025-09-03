@@ -18,6 +18,8 @@ from .steps_reasoning import (
     _micro_schema,
     _micro_strategies,
 )
+from .steps_numeric import _micro_numeric
+from .steps_alt import _micro_alt
 from .steps_execution import _micro_execute_plan
 from .steps_candidate import (
     _micro_solve_sympy,
@@ -38,6 +40,8 @@ DEFAULT_MICRO_STEPS = [
     _micro_goal,
     _micro_classify,
     _micro_repr,
+    _micro_numeric,
+    _micro_alt,
     _micro_schema,
     _micro_strategies,
     _micro_execute_plan,
@@ -61,6 +65,8 @@ def build_steps(*, max_iters: Optional[int] = None) -> list:
         _micro_goal,
         _micro_classify,
         _micro_repr,
+        _micro_numeric,
+        _micro_alt,
         _micro_schema,
         _micro_strategies,
         _exec,
