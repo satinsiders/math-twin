@@ -108,7 +108,9 @@ class FeasibleSampleOperator(Operator):
     name: str = "feasible_sample"
 
     def applicable(self, state: MicroState) -> bool:  # pragma: no cover - trivial
-        return bool(state.V["symbolic"]["variables"])
+        return bool(state.V["symbolic"]["variables"]) and not bool(
+            state.V["symbolic"]["derived"].get("sample")
+        )
 
     def apply(self, state: MicroState) -> Tuple[MicroState, float]:
         import random
