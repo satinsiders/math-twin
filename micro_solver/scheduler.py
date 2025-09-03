@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import random
+import re
 from copy import deepcopy
 from typing import Sequence
 
@@ -81,6 +82,48 @@ def _bounds_volume(bounds: dict[str, tuple[float | None, float | None]] | None) 
             span = 0.0
         vol *= span
     return float(vol if any_bound else 0.0)
+
+
+def decompose_goal(state: MicroState) -> MicroState:
+    """Split multi-part goals and seed ``plan_steps`` with subgoals.
+
+    The micro-solver sometimes receives problems with composite goals such as
+    "solve for x and y".  This helper detects such phrasing and decomposes the
+    goal into individual objectives.  ``state.goal`` is converted into a list of
+    subgoal strings and ``state.plan_steps`` is initialised with a planning step
+    per subgoal so downstream agents can reason about them independently.
+
+    The split is intentionally lightweight – it looks for conjunctions like
+    ``and``/","/``;`` and preserves any leading verb phrase (e.g. ``solve for``).
+    If no split is detected the state is returned unchanged.
+    """
+
+    goal = state.goal
+    if not goal or isinstance(goal, list):
+        return state
+
+    parts: list[str] = []
+
+    # Handle patterns like "solve for x and y" preserving the prefix
+    match = re.match(r"(.+?for\s+)(.+)", goal)
+    if match and re.search(r"\band\b|[,;]", match.group(2)):
+        prefix = match.group(1)
+        rest = match.group(2)
+        tokens = [t.strip() for t in re.split(r"[,;]|\band\b", rest) if t.strip()]
+        if len(tokens) > 1:
+            parts = [prefix + t for t in tokens]
+
+    if not parts:
+        tokens = [t.strip() for t in re.split(r"[,;]|\band\b", goal) if t.strip()]
+        if len(tokens) > 1:
+            parts = tokens
+
+    if len(parts) <= 1:
+        return state
+
+    state.goal = parts
+    state.plan_steps = [{"action": "subgoal", "goal": g} for g in parts]
+    return state
 
 
 def update_metrics(state: MicroState) -> MicroState:
@@ -185,6 +228,9 @@ def select_operator(state: MicroState, operators: Sequence[Operator]) -> Operato
 
 def replan(state: MicroState) -> MicroState:
     """Extended replan heuristic switching representations and branches."""
+    # Decompose multi-part goals into individual subgoals
+    if isinstance(state.goal, str) and re.search(r"\band\b|[,;]", state.goal):
+        state = decompose_goal(state)
 
     # Representation swap
     if len(state.representations) > 1:
