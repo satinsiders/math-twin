@@ -83,6 +83,56 @@ def numeric_jacobian(
     return J.applyfunc(lambda e: e.evalf())
 
 
+def build_independence_graph(
+    relations: Sequence[str],
+    variables: Sequence[str],
+):
+    """Return a graph of independent variables and redundant relations.
+
+    The function evaluates the numeric Jacobian of ``relations`` with respect to
+    ``variables`` and inspects its columns for linear dependence.  Pivot columns
+    are treated as independent variables and any relation that does not
+    participate in a pivot column is considered redundant.
+
+    The returned dictionary has two keys:
+
+    ``graph``
+        Mapping of independent variable names to the indices of relations that
+        contribute a non‑zero entry in the corresponding Jacobian column.
+
+    ``redundant``
+        Sorted list of relation indices deemed redundant.
+
+    When SymPy is unavailable or rank computation fails an empty graph is
+    returned.
+    """
+
+    J = numeric_jacobian(relations, variables)
+    if J is None or J.rows == 0 or J.cols == 0:
+        return {"graph": {}, "redundant": []}
+
+    try:
+        _rref, pivots = J.rref()
+    except Exception:
+        pivots = []
+
+    graph: Dict[str, list[int]] = {}
+    for col in pivots:
+        var = variables[col] if col < len(variables) else str(col)
+        rows: list[int] = []
+        for r in range(J.rows):
+            try:
+                val = float(J[r, col])
+            except Exception:
+                continue
+            if abs(val) > 1e-12:
+                rows.append(r)
+        graph[var] = rows
+
+    redundant = mark_redundant_constraints(relations, variables)
+    return {"graph": graph, "redundant": redundant}
+
+
 def mark_redundant_constraints(
     relations: Sequence[str],
     variables: Optional[Sequence[str]] = None,
