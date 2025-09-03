@@ -176,7 +176,13 @@ def replan(state: MicroState) -> MicroState:
             idx = state.representations.index(state.representation)
         except ValueError:
             idx = -1
-        state.representation = state.representations[(idx + 1) % len(state.representations)]
+        next_rep = state.representations[(idx + 1) % len(state.representations)]
+        if next_rep != state.representation:
+            # Swap active view containers so symbolic bucket always refers to current view
+            for bucket in ("R", "C", "V", "A"):
+                data = getattr(state, bucket)
+                data["symbolic"], data[next_rep] = data[next_rep], data["symbolic"]
+            state.representation = next_rep
 
     # Reseed numeric solver initial conditions
     state.numeric_seed = random.random()
