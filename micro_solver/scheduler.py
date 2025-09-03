@@ -137,6 +137,23 @@ def goal_satisfied(state: MicroState) -> bool:
     return state.A["symbolic"].get("final") is not None
 
 
+def init_candidates(state: MicroState) -> MicroState:
+    """Seed obvious candidate answers from the environment or target."""
+
+    if state.A["symbolic"].get("candidates"):
+        return state
+    try:
+        cr = state.R["symbolic"].get("canonical_repr")
+        target = (cr or {}).get("target") if isinstance(cr, dict) else None
+        if isinstance(target, str) and target.strip():
+            ok, val = evaluate_with_env(target, state.V["symbolic"].get("env", {}))
+            if ok:
+                state.A["symbolic"]["candidates"].append(val)
+    except Exception:
+        pass
+    return state
+
+
 def select_operator(state: MicroState, operators: Sequence[Operator]) -> Operator | None:
     """Pick the applicable operator with the highest score."""
 
@@ -196,6 +213,7 @@ def replan(state: MicroState) -> MicroState:
 def solve(state: MicroState, operators: Sequence[Operator], *, max_iters: int = 10) -> MicroState:
     """Iteratively apply operators chosen by progress signals."""
 
+    state = init_candidates(state)
     for _ in range(max_iters):
         state = update_metrics(state)
         if goal_satisfied(state):

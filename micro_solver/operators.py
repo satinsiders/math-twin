@@ -149,7 +149,7 @@ class FeasibleSampleOperator(Operator):
                 high = 1.0
             if low >= high:
                 high = low + 1.0
-            sample[v] = random.uniform(low, high)
+            sample[v] = round(random.uniform(low, high), 3)
         state.V["symbolic"]["derived"]["sample"] = sample
         return state, 0.0
 
@@ -174,7 +174,14 @@ class SolveOperator(Operator):
         # Pick the first variable that is not yet bound in the environment.
         # When all variables are bound already, fall back to the first variable
         # so that its value can still be surfaced as a candidate answer.
-        target = next((v for v in state.V["symbolic"]["variables"] if v not in state.V["symbolic"]["env"]), None)
+        target = next(
+            (
+                v
+                for v in state.V["symbolic"]["variables"]
+                if v not in state.V["symbolic"]["env"]
+            ),
+            None,
+        )
         if target is None and state.V["symbolic"]["variables"]:
             target = state.V["symbolic"]["variables"][0]
 
@@ -194,7 +201,14 @@ class SolveOperator(Operator):
         return state, 0.0
 
     def score(self, state: MicroState) -> float:
-        target = next((v for v in state.V["symbolic"]["variables"] if v not in state.V["symbolic"]["env"]), None)
+        target = next(
+            (
+                v
+                for v in state.V["symbolic"]["variables"]
+                if v not in state.V["symbolic"]["env"]
+            ),
+            None,
+        )
         if target is None and state.V["symbolic"]["variables"]:
             target = state.V["symbolic"]["variables"][0]
         rels = _apply_env(state.C["symbolic"], state.V["symbolic"].get("env", {}))
@@ -228,7 +242,14 @@ class VerifyOperator(Operator):
             return state, 0.0
 
         # Choose the variable corresponding to the candidate: first unbound symbol
-        var = next((v for v in state.V["symbolic"]["variables"] if v not in state.V["symbolic"]["env"]), None)
+        var = next(
+            (
+                v
+                for v in state.V["symbolic"]["variables"]
+                if v not in state.V["symbolic"]["env"]
+            ),
+            None,
+        )
 
         # Substitute known bindings into the relations before verification
         rels = _apply_env(state.C["symbolic"], state.V["symbolic"]["env"])
@@ -243,7 +264,14 @@ class VerifyOperator(Operator):
             candidate = str(state.A["symbolic"]["candidates"][-1])
         except Exception:
             return 0.0
-        var = next((v for v in state.V["symbolic"]["variables"] if v not in state.V["symbolic"]["env"]), None)
+        var = next(
+            (
+                v
+                for v in state.V["symbolic"]["variables"]
+                if v not in state.V["symbolic"]["env"]
+            ),
+            None,
+        )
         rels = _apply_env(state.C["symbolic"], state.V["symbolic"]["env"])
         return 1.0 if verify_candidate(rels, candidate, varname=var) else 0.0
 
@@ -271,7 +299,9 @@ class EliminateOperator(Operator):
         delta = float(before - after)
         if delta > 0:
             state.C["symbolic"] = new_rel
-            state.V["symbolic"]["variables"] = [v for v in state.V["symbolic"]["variables"] if v != target]
+            state.V["symbolic"]["variables"] = [
+                v for v in state.V["symbolic"]["variables"] if v != target
+            ]
         return state, delta
 
     def score(self, state: MicroState) -> float:
@@ -478,8 +508,7 @@ class CaseSplitOperator(Operator):
                 L = parse_expr(lhs, transformations=trans)
                 R = parse_expr(rhs, transformations=trans)
                 if L.is_Pow and L.exp == 2 and len(L.free_symbols) == 1 and R.is_number:
-                    sym = list(L.free_symbols)[0]
-                    root = sp.sqrt(R)
+                    sp.sqrt(R)
                     return float(2)
         except Exception:
             pass
@@ -713,7 +742,10 @@ class QuadratureOperator(Operator):
     name: str = "quadrature"
 
     def applicable(self, state: MicroState) -> bool:  # pragma: no cover - trivial
-        return "integrand" in state.V["symbolic"]["derived"] and "interval" in state.V["symbolic"]["derived"]
+        return (
+            "integrand" in state.V["symbolic"]["derived"]
+            and "interval" in state.V["symbolic"]["derived"]
+        )
 
     def apply(self, state: MicroState) -> Tuple[MicroState, float]:
         try:

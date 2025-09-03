@@ -30,7 +30,9 @@ class MicroGraph:
 
 
 class MicroRunner:
-    def __init__(self, graph: MicroGraph, *, verbose: bool = False, qa_max_retries: int = 5) -> None:
+    def __init__(
+        self, graph: MicroGraph, *, verbose: bool = False, qa_max_retries: int = 5
+    ) -> None:
         self.graph = graph
         self.verbose = verbose
         self.qa_max_retries = qa_max_retries
@@ -38,7 +40,9 @@ class MicroRunner:
         self.logger = logging.getLogger("micro_solver.orchestrator")
         self.logger.setLevel(logging.INFO if verbose else logging.WARNING)
 
-    def _qa(self, step_name: str, before: MicroState, after: MicroState, out_obj: Any) -> tuple[bool, str]:  # noqa: ANN401 - generic
+    def _qa(
+        self, step_name: str, before: MicroState, after: MicroState, out_obj: Any
+    ) -> tuple[bool, str]:  # noqa: ANN401 - generic
         # (Legacy static-plan prechecks removed; dynamic atomic planning is used.)
         try:
             payload = json.dumps({
@@ -94,7 +98,10 @@ class MicroRunner:
                 state.error = err
                 raise RuntimeError(err)
         # Step-specific minimal outputs for QA
-        def _build_step_out(step_name: str, before: MicroState, after: MicroState) -> dict[str, Any]:  # noqa: ANN401 - generic
+
+        def _build_step_out(
+            step_name: str, before: MicroState, after: MicroState
+        ) -> dict[str, Any]:  # noqa: ANN401 - generic
             try:
                 if step_name == "tokenize":
                     return {
@@ -127,15 +134,8 @@ class MicroRunner:
                         "relations": after.C["symbolic"],
                         "progress_score": after.M.get("progress_score"),
                         "degrees_of_freedom": after.M.get("degrees_of_freedom"),
+                        "final_answer": after.A["symbolic"].get("final"),
                     }
-                if step_name == "extract_candidate":
-                    last = after.A["symbolic"]["candidates"][-1] if after.A["symbolic"]["candidates"] else None
-                    return {"candidate": last}
-                if step_name == "simplify_candidate_sympy":
-                    last = after.A["symbolic"]["candidates"][-1] if after.A["symbolic"]["candidates"] else None
-                    return {"candidate_simplified": last}
-                if step_name in {"verify_sympy", "verify"}:
-                    return {"final_answer": after.A["symbolic"].get("final")}
             except Exception:
                 pass
             # Fallback: generic delta
@@ -158,10 +158,15 @@ class MicroRunner:
                 if step_name == "normalize":
                     return f"normalized_len={len(after.R['symbolic'].get('normalized_text') or '')}"
                 if step_name == "tokenize":
-                    return f"sentences={len(after.R['symbolic'].get('sentences') or [])} tokens={len(after.R['symbolic'].get('tokens') or [])}"
+                    return (
+                        f"sentences={len(after.R['symbolic'].get('sentences') or [])} "
+                        f"tokens={len(after.R['symbolic'].get('tokens') or [])}"
+                    )
                 if step_name == "entities":
                     return (
-                        f"vars={len(after.V['symbolic'].get('variables') or [])} consts={len(after.V['symbolic'].get('constants') or [])} qty={len(after.V['symbolic'].get('quantities') or [])}"
+                        f"vars={len(after.V['symbolic'].get('variables') or [])} "
+                        f"consts={len(after.V['symbolic'].get('constants') or [])} "
+                        f"qty={len(after.V['symbolic'].get('quantities') or [])}"
                     )
                 if step_name == "relations":
                     head = _trunc(after.C["symbolic"][0]) if after.C["symbolic"] else ""
@@ -205,15 +210,12 @@ class MicroRunner:
                         tail += f" score={after.M.get('progress_score')}"
                     except Exception:
                         pass
+                    try:
+                        if after.A["symbolic"].get("final") is not None:
+                            tail += f" final='{_trunc(after.A['symbolic'].get('final'))}'"
+                    except Exception:
+                        pass
                     return base + tail
-                if step_name == "extract_candidate":
-                    cand = after.A["symbolic"]["candidates"][-1] if after.A["symbolic"]["candidates"] else None
-                    return f"candidate='{_trunc(cand)}'"
-                if step_name == "simplify_candidate_sympy":
-                    cand = after.A["symbolic"]["candidates"][-1] if after.A["symbolic"]["candidates"] else None
-                    return f"simplified='{_trunc(cand)}'"
-                if step_name in {"verify_sympy", "verify"}:
-                    return f"final='{_trunc(after.A["symbolic"].get("final"))}'"
             except Exception:
                 return ""
             return ""
@@ -304,7 +306,11 @@ class MicroRunner:
             # 1) If we have candidates, surface the last one as an unverified fallback
             fallback_msg = None
             try:
-                last_cand = state.A["symbolic"]["candidates"][-1] if state.A["symbolic"]["candidates"] else None
+                last_cand = (
+                    state.A["symbolic"]["candidates"][-1]
+                    if state.A["symbolic"]["candidates"]
+                    else None
+                )
             except Exception:
                 last_cand = None
             if last_cand is not None:

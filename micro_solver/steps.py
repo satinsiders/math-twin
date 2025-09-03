@@ -19,12 +19,6 @@ from .steps_reasoning import (
     _micro_strategies,
 )
 from .steps_execution import _micro_execute_plan
-from .steps_candidate import (
-    _micro_solve_sympy,
-    _micro_extract_candidate,
-    _micro_simplify_candidate_sympy,
-    _micro_verify_sympy,
-)
 from .steps_meta import _micro_monitor_dof
 
 
@@ -65,8 +59,4 @@ def build_steps(*, max_iters: Optional[int] = None) -> list:
         _micro_strategies,
         _exec,
         _micro_monitor_dof,
-        _micro_solve_sympy,
-        _micro_extract_candidate,
-        _micro_simplify_candidate_sympy,
-        _micro_verify_sympy,
     ]
