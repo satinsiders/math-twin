@@ -9,6 +9,7 @@ stages can decide whether a replan is required.
 
 from .state import MicroState
 from .sym_utils import estimate_jacobian_rank, parse_relation_sides
+from .constraint_analysis import build_independence_graph
 
 
 def _micro_monitor_dof(state: MicroState) -> MicroState:
@@ -28,6 +29,11 @@ def _micro_monitor_dof(state: MicroState) -> MicroState:
     ineq_count = sum(
         1 for r in state.C["symbolic"] if parse_relation_sides(r)[0] in ("<", "<=", ">", ">=")
     )
+
+    independence = build_independence_graph(eq_relations, unknowns)
+    redundant_idx = independence.get("redundant", [])
+    state.M["redundant_constraints"] = [eq_relations[i] for i in redundant_idx]
+    state.M["independence_graph"] = independence.get("graph", {})
 
     rank = estimate_jacobian_rank(eq_relations, unknowns)
     state.M["eq_count"] = eq_count

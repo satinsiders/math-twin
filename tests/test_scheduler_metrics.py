@@ -103,3 +103,12 @@ def test_select_operator_breaks_ties_with_delta() -> None:
     ops = [ZeroDeltaOp(), PositiveDeltaOp()]
     chosen = select_operator(state, ops)
     assert isinstance(chosen, PositiveDeltaOp)
+
+
+def test_update_metrics_drops_redundant_relations() -> None:
+    state = MicroState()
+    state.V["symbolic"]["variables"] = ["x", "y"]
+    state.C["symbolic"] = ["x + y = 2", "2x + 2y = 4", "x - y = 0"]
+    state = update_metrics(state)
+    assert "2x + 2y = 4" not in state.C["symbolic"]
+    assert state.M["redundant_constraints"] == ["2x + 2y = 4"]
