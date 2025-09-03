@@ -30,7 +30,13 @@ class MicroGraph:
 
 
 class MicroRunner:
-    def __init__(self, graph: MicroGraph, *, verbose: bool = False, qa_max_retries: int = 5) -> None:
+    def __init__(
+        self,
+        graph: MicroGraph,
+        *,
+        verbose: bool = False,
+        qa_max_retries: int = 5,
+    ) -> None:
         self.graph = graph
         self.verbose = verbose
         self.qa_max_retries = qa_max_retries
@@ -38,7 +44,13 @@ class MicroRunner:
         self.logger = logging.getLogger("micro_solver.orchestrator")
         self.logger.setLevel(logging.INFO if verbose else logging.WARNING)
 
-    def _qa(self, step_name: str, before: MicroState, after: MicroState, out_obj: Any) -> tuple[bool, str]:  # noqa: ANN401 - generic
+    def _qa(
+        self,
+        step_name: str,
+        before: MicroState,
+        after: MicroState,
+        out_obj: Any,
+    ) -> tuple[bool, str]:  # noqa: ANN401 - generic
         # (Legacy static-plan prechecks removed; dynamic atomic planning is used.)
         try:
             payload = json.dumps({
@@ -93,8 +105,13 @@ class MicroRunner:
                 self.logger.error(err)
                 state.error = err
                 raise RuntimeError(err)
+
         # Step-specific minimal outputs for QA
-        def _build_step_out(step_name: str, before: MicroState, after: MicroState) -> dict[str, Any]:  # noqa: ANN401 - generic
+        def _build_step_out(
+            step_name: str,
+            before: MicroState,
+            after: MicroState,
+        ) -> dict[str, Any]:  # noqa: ANN401 - generic
             try:
                 if step_name == "tokenize":
                     return {
@@ -129,10 +146,18 @@ class MicroRunner:
                         "degrees_of_freedom": after.M.get("degrees_of_freedom"),
                     }
                 if step_name == "extract_candidate":
-                    last = after.A["symbolic"]["candidates"][-1] if after.A["symbolic"]["candidates"] else None
+                    last = (
+                        after.A["symbolic"]["candidates"][-1]
+                        if after.A["symbolic"]["candidates"]
+                        else None
+                    )
                     return {"candidate": last}
                 if step_name == "simplify_candidate_sympy":
-                    last = after.A["symbolic"]["candidates"][-1] if after.A["symbolic"]["candidates"] else None
+                    last = (
+                        after.A["symbolic"]["candidates"][-1]
+                        if after.A["symbolic"]["candidates"]
+                        else None
+                    )
                     return {"candidate_simplified": last}
                 if step_name in {"verify_sympy", "verify"}:
                     return {"final_answer": after.A["symbolic"].get("final")}
@@ -158,10 +183,15 @@ class MicroRunner:
                 if step_name == "normalize":
                     return f"normalized_len={len(after.R['symbolic'].get('normalized_text') or '')}"
                 if step_name == "tokenize":
-                    return f"sentences={len(after.R['symbolic'].get('sentences') or [])} tokens={len(after.R['symbolic'].get('tokens') or [])}"
+                    return (
+                        f"sentences={len(after.R['symbolic'].get('sentences') or [])} "
+                        f"tokens={len(after.R['symbolic'].get('tokens') or [])}"
+                    )
                 if step_name == "entities":
                     return (
-                        f"vars={len(after.V['symbolic'].get('variables') or [])} consts={len(after.V['symbolic'].get('constants') or [])} qty={len(after.V['symbolic'].get('quantities') or [])}"
+                        f"vars={len(after.V['symbolic'].get('variables') or [])} "
+                        f"consts={len(after.V['symbolic'].get('constants') or [])} "
+                        f"qty={len(after.V['symbolic'].get('quantities') or [])}"
                     )
                 if step_name == "relations":
                     head = _trunc(after.C["symbolic"][0]) if after.C["symbolic"] else ""
@@ -207,10 +237,18 @@ class MicroRunner:
                         pass
                     return base + tail
                 if step_name == "extract_candidate":
-                    cand = after.A["symbolic"]["candidates"][-1] if after.A["symbolic"]["candidates"] else None
+                    cand = (
+                        after.A["symbolic"]["candidates"][-1]
+                        if after.A["symbolic"]["candidates"]
+                        else None
+                    )
                     return f"candidate='{_trunc(cand)}'"
                 if step_name == "simplify_candidate_sympy":
-                    cand = after.A["symbolic"]["candidates"][-1] if after.A["symbolic"]["candidates"] else None
+                    cand = (
+                        after.A["symbolic"]["candidates"][-1]
+                        if after.A["symbolic"]["candidates"]
+                        else None
+                    )
                     return f"simplified='{_trunc(cand)}'"
                 if step_name in {"verify_sympy", "verify"}:
                     return f"final='{_trunc(after.A["symbolic"].get("final"))}'"
@@ -255,6 +293,10 @@ class MicroRunner:
                     attempts += 1
                     if attempts >= self.qa_max_retries:
                         # Exhausted retries; surface the error and stop
+                        try:
+                            state.log.append(f"{name}:error:{err_reason}")
+                        except Exception:
+                            pass
                         return state
                     # Log and retry with feedback
                     try:
@@ -273,6 +315,10 @@ class MicroRunner:
                     continue
                 if state.skip_qa:
                     state.skip_qa = False
+                    try:
+                        state.log.append(f"{name}:skip")
+                    except Exception:
+                        pass
                     break
                 out_obj = _build_step_out(name, before, state)
                 ok, reason = self._qa(name, before, state, out_obj)
@@ -286,10 +332,18 @@ class MicroRunner:
                 )
                 if ok:
                     state.qa_feedback = None
+                    try:
+                        state.log.append(f"{name}:{reason or 'pass'}")
+                    except Exception:
+                        pass
                     break
                 attempts += 1
                 if attempts >= self.qa_max_retries:
                     state.error = f"QA failed for {name}: {reason}"
+                    try:
+                        state.log.append(f"{name}:{reason}")
+                    except Exception:
+                        pass
                     return state
                 # Revert and attach feedback for retry
                 before.qa_feedback = reason
@@ -304,7 +358,11 @@ class MicroRunner:
             # 1) If we have candidates, surface the last one as an unverified fallback
             fallback_msg = None
             try:
-                last_cand = state.A["symbolic"]["candidates"][-1] if state.A["symbolic"]["candidates"] else None
+                last_cand = (
+                    state.A["symbolic"]["candidates"][-1]
+                    if state.A["symbolic"]["candidates"]
+                    else None
+                )
             except Exception:
                 last_cand = None
             if last_cand is not None:

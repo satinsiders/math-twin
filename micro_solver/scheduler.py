@@ -130,6 +130,15 @@ def update_metrics(state: MicroState) -> MicroState:
         + metrics.get("bounds_volume_reduction", 0.0)
         + metrics.get("sample_size_reduction", 0.0)
     )
+    try:
+        state.log.append(
+            "metrics: "
+            f"dof={metrics.get('degrees_of_freedom')} "
+            f"res={metrics.get('residual_l2')} "
+            f"score={metrics.get('progress_score')}"
+        )
+    except Exception:
+        pass
     return state
 
 
@@ -190,6 +199,12 @@ def replan(state: MicroState) -> MicroState:
         state.C["symbolic"] = list(reversed(state.C["symbolic"]))
 
     state.M["needs_replan"] = False
+    try:
+        state.log.append(
+            f"replan: rep={state.representation} case={state.active_case}"
+        )
+    except Exception:
+        pass
     return state
 
 

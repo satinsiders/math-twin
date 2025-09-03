@@ -103,3 +103,4 @@ class MicroState:
     error: Optional[str] = None
     skip_qa: bool = False
     next_steps: Optional[List] = None
+    log: list[str] = field(default_factory=list)
