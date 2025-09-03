@@ -20,7 +20,7 @@ from .steps_reasoning import (
 )
 from .steps_numeric import _micro_numeric
 from .steps_alt import _micro_alt
-from .steps_execution import _micro_execute_plan
+from .scheduler import solve_with_defaults
 from .steps_candidate import (
     _micro_solve_sympy,
     _micro_extract_candidate,
@@ -28,6 +28,13 @@ from .steps_candidate import (
     _micro_verify_sympy,
 )
 from .steps_meta import _micro_monitor_dof
+
+
+def _micro_execute_plan(state: MicroState, *, max_iters: Optional[int] = None) -> MicroState:
+    """Compatibility placeholder triggering the scheduler."""
+
+    solve_with_defaults(state, max_iters=max_iters or 10)
+    return state
 
 
 # Convenience top‑level graph for a simple end‑to‑end solve pass
