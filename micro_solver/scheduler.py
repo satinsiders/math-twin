@@ -88,11 +88,13 @@ def update_metrics(state: MicroState) -> MicroState:
 
     prev_metrics = dict(getattr(state, "M", {}))
     state = _micro_monitor_dof(state)
-    redundant = list(state.M.get("redundant_constraints", []))
-    if redundant:
-        state.C["symbolic"] = [r for r in state.C["symbolic"] if r not in redundant]
+    redundant_idx = list(state.M.get("redundant_constraints_idx", []))
+    if redundant_idx:
+        removed = [r for i, r in enumerate(state.C["symbolic"]) if i in redundant_idx]
+        state.C["symbolic"] = [r for i, r in enumerate(state.C["symbolic"]) if i not in redundant_idx]
         state = _micro_monitor_dof(state)
-        state.M["redundant_constraints"] = redundant
+        state.M["redundant_constraints_idx"] = redundant_idx
+        state.M["redundant_constraints"] = removed
     metrics = dict(getattr(state, "M", {}))
 
     prev_dof = prev_metrics.get("degrees_of_freedom")

@@ -129,6 +129,7 @@ class FeasibleSampleOperator(Operator):
     def apply(self, state: MicroState) -> Tuple[MicroState, float]:
         import random
 
+        random.seed(state.numeric_seed)
         sample: dict[str, float] = {}
         for v in state.V["symbolic"]["variables"]:
             low, high = state.domain.get(v, (None, None))
@@ -149,7 +150,8 @@ class FeasibleSampleOperator(Operator):
                 high = 1.0
             if low >= high:
                 high = low + 1.0
-            sample[v] = random.uniform(low, high)
+            val = random.uniform(low, high)
+            sample[v] = round(val, 3)
         state.V["symbolic"]["derived"]["sample"] = sample
         return state, 0.0
 

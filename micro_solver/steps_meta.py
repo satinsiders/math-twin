@@ -30,9 +30,10 @@ def _micro_monitor_dof(state: MicroState) -> MicroState:
         1 for r in state.C["symbolic"] if parse_relation_sides(r)[0] in ("<", "<=", ">", ">=")
     )
 
-    independence = build_independence_graph(eq_relations, unknowns)
+    independence = build_independence_graph(state.C["symbolic"], unknowns)
     redundant_idx = independence.get("redundant", [])
-    state.M["redundant_constraints"] = [eq_relations[i] for i in redundant_idx]
+    state.M["redundant_constraints_idx"] = redundant_idx
+    state.M["redundant_constraints"] = [state.C["symbolic"][i] for i in redundant_idx]
     state.M["independence_graph"] = independence.get("graph", {})
 
     rank = estimate_jacobian_rank(eq_relations, unknowns)

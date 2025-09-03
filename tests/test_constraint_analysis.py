@@ -40,4 +40,5 @@ def test_monitor_dof_records_redundant() -> None:
     state.V["symbolic"]["variables"] = ["x", "y"]
     state.C["symbolic"] = ["x + y = 2", "2x + 2y = 4", "x - y = 0"]
     state = _micro_monitor_dof(state)
+    assert state.M["redundant_constraints_idx"] == [1]
     assert state.M["redundant_constraints"] == ["2x + 2y = 4"]

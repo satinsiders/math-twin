@@ -111,4 +111,5 @@ def test_update_metrics_drops_redundant_relations() -> None:
     state.C["symbolic"] = ["x + y = 2", "2x + 2y = 4", "x - y = 0"]
     state = update_metrics(state)
     assert "2x + 2y = 4" not in state.C["symbolic"]
+    assert state.M["redundant_constraints_idx"] == [1]
     assert state.M["redundant_constraints"] == ["2x + 2y = 4"]
