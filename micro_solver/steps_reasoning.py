@@ -6,31 +6,39 @@ from .steps_util import _invoke
 
 
 def _micro_schema(state: MicroState) -> MicroState:
-    payload = {
-        "type": state.problem_type,
-        "relations": state.C["symbolic"],
-        "target": state.goal,
-    }
-    out, err = _invoke(A.SchemaRetrieverAgent, payload, qa_feedback=state.qa_feedback)
-    state.qa_feedback = None
-    if err:
-        state.error = f"SchemaRetrieverAgent:{err}"
-        return state
-    state.schemas = [str(x) for x in out.get("schemas", [])]
+    targets = state.goal if isinstance(state.goal, list) else [state.goal]
+    schemas: list[str] = []
+    for t in targets:
+        payload = {
+            "type": state.problem_type,
+            "relations": state.C["symbolic"],
+            "target": t,
+        }
+        out, err = _invoke(A.SchemaRetrieverAgent, payload, qa_feedback=state.qa_feedback)
+        state.qa_feedback = None
+        if err:
+            state.error = f"SchemaRetrieverAgent:{err}"
+            return state
+        schemas.extend(str(x) for x in out.get("schemas", []))
+    state.schemas = schemas
     return state
 
 
 def _micro_strategies(state: MicroState) -> MicroState:
-    out, err = _invoke(
-        A.StrategyEnumeratorAgent,
-        {"schemas": state.schemas, "relations": state.C["symbolic"], "target": state.goal},
-        qa_feedback=state.qa_feedback,
-    )
-    state.qa_feedback = None
-    if err:
-        state.error = f"StrategyEnumeratorAgent:{err}"
-        return state
-    state.strategies = [str(x) for x in out.get("strategies", [])]
+    targets = state.goal if isinstance(state.goal, list) else [state.goal]
+    strategies: list[str] = []
+    for t in targets:
+        out, err = _invoke(
+            A.StrategyEnumeratorAgent,
+            {"schemas": state.schemas, "relations": state.C["symbolic"], "target": t},
+            qa_feedback=state.qa_feedback,
+        )
+        state.qa_feedback = None
+        if err:
+            state.error = f"StrategyEnumeratorAgent:{err}"
+            return state
+        strategies.extend(str(x) for x in out.get("strategies", []))
+    state.strategies = strategies
     return state
 
 
